@@ -14,6 +14,15 @@ function extract(name,nextMarker) {
   return vm.runInNewContext('('+app.slice(valueStart,end).trim().replace(/;$/,'')+')');
 }
 
+function loadAiHelpers() {
+  const start=app.indexOf('  function parseJsonObject');
+  const end=app.indexOf('\n  function routeTo',start);
+  assert(start>=0&&end>start,'Không tìm thấy AI response helpers');
+  const context={};
+  vm.runInNewContext(app.slice(start,end)+'\nthis.normalizeAiResponse=normalizeAiResponse;this.aiText=aiText;',context);
+  return context;
+}
+
 const roadmap=extract('roadmapData','\n  const practiceData');
 const practice=extract('practiceData','\n\n  function saveState');
 const levels=['A1','A2','B1','B2'];
@@ -34,8 +43,14 @@ assert(app.includes("bridgeCall('gemini'"),'Frontend chưa gọi Gemini qua Apps
 assert(backend.includes('UrlFetchApp.fetch'),'Apps Script chưa có Gemini proxy');
 assert(backend.includes('CONFIG_PROPERTY_KEY'),'Apps Script chưa cache config trong Script Properties');
 assert(backend.includes('callGeminiWithRefresh_'),'Apps Script chưa refresh key khi lỗi xác thực');
+assert(backend.includes('normalizeGeminiPayload_'),'Apps Script chưa unwrap JSON nhiều lớp');
 assert(!app.includes('x-goog-api-key'),'Frontend vẫn chứa logic gửi Gemini key');
 assert(app.includes("renderFiniteSummary('vocabulary')"),'Flashcard chưa có điểm kết thúc');
 assert(app.includes("return renderFiniteSummary(type)"),'Nghe/đọc chưa có điểm kết thúc');
+
+const aiHelpers=loadAiHelpers();
+const nestedReply=JSON.stringify({reply:'Sure! Would you like that hot or iced?',suggestions:['Iced coffee, please.']});
+const normalized=aiHelpers.normalizeAiResponse({ok:true,reply:JSON.stringify(nestedReply)});
+assert(aiHelpers.aiText(normalized.reply,'')==='Sure! Would you like that hot or iced?','Chat vẫn hiển thị nguyên object JSON');
 
 console.log('Smoke test đạt: 4 level, 5 bài nghe/đọc mỗi level, session summary, flashcard stop và Gemini proxy.');

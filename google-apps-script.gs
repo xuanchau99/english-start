@@ -351,7 +351,7 @@ function getProgress_(userId) {
 
 function promptFor_(mode,input,context,level) {
   const shared='You are Mochi, an encouraging expert English coach for a Vietnamese learner at CEFR '+(level||'A1')+
-    '. Be specific, kind, concise and accurate. Never shame the learner. Return ONLY valid JSON without markdown. User input: '+
+    '. Be specific, kind, concise and accurate. Never shame the learner. Return ONLY valid JSON without markdown. Every JSON field must contain its final plain-text value; never put JSON or a stringified object inside reply, text, correction, suggestions, or review. User input: '+
     JSON.stringify(String(input||'').slice(0,5000))+'. Context: '+JSON.stringify(String(context||'').slice(0,2500))+'.';
   if (mode==='speaking') return shared+' Listen to attached audio when present. Evaluate intelligibility, accuracy, rhythm, stress and sounds. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"English","pronunciation":"Vietnamese tip"}.';
   if (mode==='writing') return shared+' Correct grammar, word choice, organization and naturalness while preserving meaning. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"complete corrected English","explanation":"Vietnamese"}.';
@@ -403,7 +403,30 @@ function callGemini_(payload,config) {
   const responseParts=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[];
   const text=responseParts.map(function(part){return part.text||'';}).join('');
   if (!text) throw new Error('Gemini không trả về nội dung.');
-  return Object.assign({ok:true},safeJson_(text));
+  return Object.assign({ok:true},normalizeGeminiPayload_(safeJson_(text)));
+}
+
+function normalizeGeminiPayload_(input) {
+  let value=input&&typeof input==='object'?Object.assign({},input):{text:String(input||'')};
+  const seen={};
+  for (let i=0;i<8;i++) {
+    const candidates=[value.reply,value.text,value.data,value.result,value.response,value.content,value.output];
+    let nested=null;
+    for (let j=0;j<candidates.length;j++) {
+      if (candidates[j]&&typeof candidates[j]==='object') { nested=candidates[j]; break; }
+      nested=safeJsonObject_(candidates[j]);
+      if (nested) break;
+    }
+    if (!nested) break;
+    let signature='';
+    try { signature=JSON.stringify(nested); } catch (_) {}
+    if (signature&&seen[signature]) break;
+    if (signature) seen[signature]=true;
+    value=Object.assign({},value,nested);
+  }
+  if (value.reply&&typeof value.reply==='object') value=Object.assign({},value,value.reply);
+  if (typeof value.reply!=='string'&&typeof value.text==='string') value.reply=value.text;
+  return value;
 }
 
 function safeJson_(text) {
@@ -427,7 +450,15 @@ function safeJson_(text) {
 
 function safeJsonObject_(value) {
   if (typeof value!=='string') return value&&typeof value==='object'?value:null;
-  const clean=String(value).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+  let clean=String(value).replace(/^\uFEFF/,'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+  for (let i=0;i<8;i++) {
+    try {
+      const parsed=JSON.parse(clean);
+      if (parsed&&typeof parsed==='object') return parsed;
+      if (typeof parsed==='string') { clean=parsed.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim(); continue; }
+      return null;
+    } catch (_) { break; }
+  }
   try { const parsed=JSON.parse(clean); return parsed&&typeof parsed==='object'?parsed:null; }
   catch (_) {
     const start=clean.indexOf('{'),end=clean.lastIndexOf('}');

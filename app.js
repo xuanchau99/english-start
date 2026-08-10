@@ -166,26 +166,55 @@
   }
   function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
 
-  function parseJsonObject(value) {
+  function parseJsonObject(value, depth) {
+    depth=Number(depth)||0;
+    if (depth>8) return null;
     if (typeof value !== 'string') return value && typeof value === 'object' ? value : null;
-    const clean=value.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    const clean=value.replace(/^\uFEFF/,'').replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
     if (!clean) return null;
-    try { const parsed=JSON.parse(clean); return parsed && typeof parsed === 'object' ? parsed : (typeof parsed === 'string' ? parseJsonObject(parsed) : null); }
+    try { const parsed=JSON.parse(clean); return parsed && typeof parsed === 'object' ? parsed : (typeof parsed === 'string' ? parseJsonObject(parsed,depth+1) : null); }
     catch (_) {
       const start=clean.indexOf('{'),end=clean.lastIndexOf('}');
-      if (start>=0 && end>start) try { const parsed=JSON.parse(clean.slice(start,end+1)); return parsed && typeof parsed === 'object' ? parsed : null; } catch (__) {}
+      if (start>=0 && end>start) try {
+        const parsed=JSON.parse(clean.slice(start,end+1));
+        return parsed && typeof parsed === 'object' ? parsed : (typeof parsed === 'string' ? parseJsonObject(parsed,depth+1) : null);
+      } catch (__) {}
       return null;
     }
   }
 
+  function extractJsonStringField(value,field) {
+    if (typeof value!=='string') return '';
+    const match=value.match(new RegExp('"'+field+'"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"','s'));
+    if (!match) return '';
+    try { return JSON.parse('"'+match[1]+'"'); }
+    catch (_) { return match[1].replace(/\\n/g,' ').replace(/\\"/g,'"').replace(/\\\\/g,'\\').trim(); }
+  }
+
   function normalizeAiResponse(data) {
     let result=data && typeof data === 'object' ? {...data} : {text:String(data||'')};
-    for (let i=0;i<3;i++) {
-      const nested=parseJsonObject(result.reply) || parseJsonObject(result.text);
+    const seen=new Set();
+    for (let i=0;i<8;i++) {
+      const sources=['reply','text','data','result','response','content','output'];
+      let nested=null;
+      for (const key of sources) {
+        const candidate=result[key];
+        if (candidate && typeof candidate==='object') { nested=candidate; break; }
+        nested=parseJsonObject(candidate);
+        if (nested) break;
+      }
       if (!nested) break;
+      let signature=''; try { signature=JSON.stringify(nested); } catch (_) {}
+      if (signature && seen.has(signature)) break;
+      if (signature) seen.add(signature);
       result={...result,...nested};
     }
     if (result.reply && typeof result.reply === 'object') result={...result,...result.reply};
+    if (typeof result.reply==='string') {
+      const nestedReply=parseJsonObject(result.reply);
+      if (nestedReply) result={...result,...nestedReply};
+      else if (/^\s*\{/.test(result.reply)) result.reply=extractJsonStringField(result.reply,'reply')||result.reply;
+    }
     if (typeof result.reply !== 'string' && typeof result.text === 'string') result.reply=result.text;
     return result;
   }
@@ -193,12 +222,19 @@
   function aiText(value, fallback) {
     if (Array.isArray(value)) return value.map(item=>aiText(item,'')).filter(Boolean).join(' · ') || (fallback||'');
     if (value && typeof value === 'object') {
-      const preferred=value.feedback||value.comment||value.tip||value.text||value.value;
+      const preferred=value.reply||value.feedback||value.comment||value.tip||value.text||value.value;
       if (preferred) return aiText(preferred,fallback);
       return Object.values(value).filter(item=>typeof item === 'string' || typeof item === 'number').join(' · ') || (fallback||'');
     }
     if (value == null || value === '') return fallback == null || fallback === '' ? '' : aiText(fallback,'');
-    return String(value);
+    const text=String(value);
+    const nested=parseJsonObject(text);
+    if (nested) return aiText(nested.reply||nested.text||nested.content||nested.response,fallback);
+    if (/^\s*\{/.test(text)) {
+      const extracted=extractJsonStringField(text,'reply')||extractJsonStringField(text,'text');
+      if (extracted) return extracted;
+    }
+    return text;
   }
 
   function routeTo(route) {
