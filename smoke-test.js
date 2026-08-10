@@ -30,9 +30,12 @@ levels.forEach(level=>{
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert(new Set(ids).size===ids.length,'HTML có ID bị trùng');
 ['nextListening','nextReading','nextSpeaking','nextWriting','practiceLevelSelect','listeningSummary','readingSummary','vocabularySummary','listeningTranscript'].forEach(id=>assert(ids.includes(id),'Thiếu #'+id));
-assert(!app.includes("bridgeCall('gemini'"),'Frontend vẫn gọi Gemini qua Apps Script');
-assert(!backend.includes('UrlFetchApp.fetch'),'Apps Script vẫn còn Gemini UrlFetch');
+assert(app.includes("bridgeCall('gemini'"),'Frontend chưa gọi Gemini qua Apps Script');
+assert(backend.includes('UrlFetchApp.fetch'),'Apps Script chưa có Gemini proxy');
+assert(backend.includes('CONFIG_PROPERTY_KEY'),'Apps Script chưa cache config trong Script Properties');
+assert(backend.includes('callGeminiWithRefresh_'),'Apps Script chưa refresh key khi lỗi xác thực');
+assert(!app.includes('x-goog-api-key'),'Frontend vẫn chứa logic gửi Gemini key');
 assert(app.includes("renderFiniteSummary('vocabulary')"),'Flashcard chưa có điểm kết thúc');
 assert(app.includes("return renderFiniteSummary(type)"),'Nghe/đọc chưa có điểm kết thúc');
 
-console.log('Smoke test đạt: 4 level, 5 bài nghe/đọc mỗi level, session summary, flashcard stop và direct Gemini.');
+console.log('Smoke test đạt: 4 level, 5 bài nghe/đọc mỗi level, session summary, flashcard stop và Gemini proxy.');

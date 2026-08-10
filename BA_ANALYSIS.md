@@ -57,7 +57,7 @@ FluentGo là web app học tiếng Anh mobile-first cho người Việt từ A1 
 
 ### P0 — Đã triển khai trong phiên bản này
 
-1. Gemini gọi trực tiếp từ browser, không tạo action Gemini trên Apps Script.
+1. Gemini gọi qua Apps Script để không lộ key; cấu hình dùng Script Properties/CacheService và chỉ đọc lại Sheet khi lỗi xác thực hoặc quản trị viên chủ động nạp lại.
 2. Listening và Reading có phiên hữu hạn 5 bài/level, giải thích, transcript sau khi trả lời, tổng kết và luyện lại câu sai.
 3. Speaking và Writing có nhiều đề theo level; AI chấm xong mở đề tiếp theo.
 4. Vocabulary có deck riêng A1, A2, B1 và B2; phiên dừng khi hết deck, tổng kết và luyện lại riêng nhóm “Chưa nhớ”.
@@ -116,27 +116,28 @@ FluentGo là web app học tiếng Anh mobile-first cho người Việt từ A1 
 
 ### Kiến trúc hiện tại
 
-- GitHub Pages: HTML/CSS/jQuery, lesson data, Gemini REST request và `key_ai.txt`.
-- Apps Script: đăng ký, đăng nhập, session, profile và sync progress.
+- GitHub Pages: HTML/CSS/jQuery, lesson data và Apps Script iframe bridge; không chứa Gemini key.
+- Apps Script: Gemini proxy, config cache, đăng ký, đăng nhập, session, profile và sync progress.
 - Google Sheets: Config, Users, Sessions và Progress.
-- LocalStorage: session token, state theo user và bộ đếm AI theo ngày trên thiết bị.
+- LocalStorage: session token và state học tập theo user; không lưu Gemini key.
 
-### Rủi ro key Gemini ở frontend
+### Kiểm soát rủi ro Gemini key
 
 Repository private không làm key trong website trở thành bí mật: trình duyệt phải tải key và user có thể xem trong DevTools/network. Google cũng khuyến cáo không hard-code API key trong production client. Nguồn: [Google — Using Gemini API keys](https://ai.google.dev/gemini-api/docs/generate-content/api-key).
 
-Biện pháp giảm rủi ro trong phạm vi yêu cầu hiện tại:
+Kiến trúc hiện tại loại key khỏi frontend và áp dụng:
 
 - Dùng một key riêng chỉ cho FluentGo.
 - Restrict key chỉ được dùng với Gemini API nếu Google Cloud/AI Studio hỗ trợ cấu hình đó.
 - Đặt budget alert và theo dõi Usage.
-- Giữ `dailyAiLimit`, cooldown và một request đồng thời ở frontend để ngăn thao tác nhầm; các giới hạn này không chống được người đã lấy key.
+- Giữ cooldown và một request đồng thời ở frontend; rate limit và daily limit bắt buộc được kiểm tra lại trong Apps Script.
+- Cache cấu hình bằng Script Properties/CacheService; chỉ đọc Sheet khi khởi tạo, quản trị viên nạp lại hoặc Gemini báo lỗi key/quyền.
 - Có quy trình rotate key khi nghi ngờ bị lộ.
 
 ## 8. Acceptance criteria P0
 
-- Không còn `bridgeCall('gemini', ...)` trong frontend.
-- Apps Script từ chối action `gemini` và không còn code `UrlFetchApp.fetch` tới Gemini.
+- Frontend gọi `bridgeCall('gemini', ...)` và không chứa `x-goog-api-key` hay Gemini credential.
+- Apps Script xác thực session, rate-limit rồi mới dùng `UrlFetchApp.fetch` gọi Gemini.
 - Mỗi level có tối thiểu năm bài nghe, năm bài đọc, ba câu nói, ba đề viết và sáu từ.
 - Chọn đáp án nghe/đọc luôn xuất hiện nút Next.
 - Hết phiên nghe/đọc/flashcard phải dừng ở màn hình kết quả; không tự quay về câu đầu.

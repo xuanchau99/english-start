@@ -351,7 +351,7 @@
       <label>Họ tên<input id="settingName" type="text" value="An Nguyễn"></label>
       <label>Trình độ<select id="settingLevel"><option>A1 · Người mới bắt đầu</option><option>A2 · Cơ bản</option><option>B1 · Trung cấp</option><option>B2 · Trên trung cấp</option></select></label>
       <label>Mục tiêu mỗi ngày<select id="settingGoal"><option value="10">10 phút · Nhẹ nhàng</option><option value="15" selected>15 phút · Đều đặn</option><option value="25">25 phút · Quyết tâm</option><option value="40">40 phút · Chuyên sâu</option></select></label>
-      <div class="settings-note"><span>⚙️</span><p><strong>Cấu hình do chủ ứng dụng thiết lập</strong><br>Gemini được gọi trực tiếp bằng key trong app-config.js; Apps Script chỉ xử lý tài khoản và tiến độ Google Sheets.</p></div>
+      <div class="settings-note"><span>⚙️</span><p><strong>Cấu hình do chủ ứng dụng thiết lập</strong><br>Gemini được gọi bảo mật qua Apps Script; API key không được gửi tới trình duyệt.</p></div>
       <button class="primary-btn wide" id="saveSettings">Lưu thay đổi</button>
     </div>
   </div>
@@ -364,6 +364,6 @@
 
   <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
   <script src="app-config.js"></script>
-  <script src="app.js?v=20260810-5"></script>
+  <script src="app.js?v=20260810-6"></script>
 </body>
 </html>

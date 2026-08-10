@@ -1,13 +1,16 @@
 /**
  * FluentGo secure backend for GitHub Pages.
- * Apps Script chỉ xử lý tài khoản và tiến độ Google Sheets.
- * Gemini key nằm trong app-config.js và Gemini được frontend gọi trực tiếp.
+ * Apps Script xử lý tài khoản, tiến độ và proxy Gemini an toàn cho GitHub Pages.
+ * Google Sheet là nguồn cấu hình; Script Properties + CacheService tránh đọc Sheet mỗi request.
  */
 const PROGRESS_SHEET = 'FluentGo Progress';
 const CONFIG_SHEET = 'FluentGo Config';
 const USERS_SHEET = 'FluentGo Users';
 const SESSIONS_SHEET = 'FluentGo Sessions';
 const SESSION_DAYS = 30;
+const CONFIG_CACHE_KEY = 'fluentgo_config_v3';
+const CONFIG_PROPERTY_KEY = 'FLUENTGO_CONFIG_SNAPSHOT_V1';
+const CONFIG_CACHE_SECONDS = 21600;
 const PROGRESS_HEADERS = [
   'userId','name','level','xp','streak','longestStreak','minutesWeek',
   'dailyGoal','completedToday','completedLessons','wordsLearned','lastActive','syncedAt','rawJson'
@@ -16,7 +19,12 @@ const USER_HEADERS = ['userId','email','displayName','passwordSalt','passwordHas
 const SESSION_HEADERS = ['tokenHash','userId','createdAt','expiresAt','status'];
 const CONFIG_DEFAULTS = [
   ['KEY','VALUE','MÔ TẢ'],
+  ['GEMINI_API_KEY','','Dán Gemini API key vào đây; key không được gửi xuống trình duyệt'],
+  ['GEMINI_MODEL','gemini-3.5-flash','Model Gemini sử dụng'],
   ['APP_SCRIPT_KEY','','Khóa nội bộ, được tạo tự động khi chạy setupFluentGo'],
+  ['DAILY_AI_LIMIT','100','Số lượt AI tối đa mỗi user mỗi ngày'],
+  ['AI_REQUESTS_PER_MINUTE','6','Số request AI tối đa mỗi user mỗi phút'],
+  ['GLOBAL_AI_REQUESTS_PER_MINUTE','60','Tổng request AI tối đa toàn app mỗi phút'],
   ['SYNC_REQUESTS_PER_MINUTE','10','Số lần đồng bộ tối đa mỗi user mỗi phút'],
   ['GLOBAL_REQUESTS_PER_MINUTE','180','Tổng request bridge tối đa toàn app mỗi phút']
 ];
@@ -24,6 +32,7 @@ const CONFIG_DEFAULTS = [
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('FluentGo')
     .addItem('Khởi tạo / kiểm tra cấu hình', 'setupFluentGo')
+    .addItem('Nạp lại cấu hình từ Sheet', 'reloadFluentGoConfig')
     .addToUi();
 }
 
@@ -41,13 +50,17 @@ function setupFluentGo() {
   const values = configSheet.getDataRange().getValues();
   for (let i=1; i<values.length; i++) {
     if (values[i][0] === 'APP_SCRIPT_KEY' && !values[i][1]) configSheet.getRange(i+1,2).setValue(Utilities.getUuid() + Utilities.getUuid());
-    if (values[i][0] === 'GEMINI_API_KEY' && values[i][1]) configSheet.getRange(i+1,2).clearContent();
   }
   getProgressSheet_();
   migrateUsernames_(getUsersSheet_());
   getSessionsSheet_();
-  CacheService.getScriptCache().remove('fluentgo_config_v2');
-  SpreadsheetApp.getUi().alert('Đã khởi tạo FluentGo backend. Gemini key được cấu hình trong app-config.js; Apps Script chỉ lưu tài khoản và tiến độ.');
+  refreshConfigFromSheet_();
+  SpreadsheetApp.getUi().alert('Đã khởi tạo FluentGo. Hãy dán GEMINI_API_KEY vào cột VALUE rồi chạy “Nạp lại cấu hình từ Sheet”.');
+}
+
+function reloadFluentGoConfig() {
+  const config=refreshConfigFromSheet_();
+  SpreadsheetApp.getUi().alert(config.GEMINI_API_KEY ? 'Đã nạp cấu hình. Gemini proxy sẵn sàng.' : 'Đã nạp cấu hình nhưng GEMINI_API_KEY đang trống.');
 }
 
 function doGet(e) {
@@ -56,8 +69,9 @@ function doGet(e) {
   return output_({
     ok:true,
     service:'FluentGo Apps Script Backend',
-    configured:true,
-    geminiProxy:false
+    configured:!!config.GEMINI_API_KEY,
+    geminiProxy:true,
+    model:config.GEMINI_MODEL || 'gemini-3.5-flash'
   });
 }
 
@@ -80,7 +94,7 @@ function apiRequest(request) {
     enforceActionRate_('entire-app','all-actions',Number(config.GLOBAL_REQUESTS_PER_MINUTE)||180);
     const action = String(request.action || '');
     const payload = request.payload || {};
-    if (action === 'status') return { ok:true, gemini:false, sheets:true, auth:true, mode:'accounts-and-progress-only' };
+    if (action === 'status') return { ok:true, gemini:!!config.GEMINI_API_KEY, sheets:true, auth:true, mode:'secure-gemini-proxy', model:config.GEMINI_MODEL || 'gemini-3.5-flash' };
     if (action === 'register') return registerUser_(payload,config);
     if (action === 'login') return loginUser_(payload,config);
     if (action === 'restore') return restoreSession_(request.sessionToken,config);
@@ -89,7 +103,14 @@ function apiRequest(request) {
     if (action === 'progress') return { ok:true, user:publicUser_(account), progress:getProgress_(account.userId) };
     if (action === 'profile') { enforceActionRate_(account.userId,'profile',4); return updateProfile_(account,payload); }
     if (action === 'sync') { enforceActionRate_(account.userId,'sync',Number(config.SYNC_REQUESTS_PER_MINUTE)||10); payload.userId=account.userId; payload.name=account.displayName; return saveProgress_(payload); }
-    if (action === 'gemini') throw new Error('Gemini được gọi trực tiếp từ ứng dụng, không qua Apps Script.');
+    if (action === 'gemini') {
+      if (!config.GEMINI_API_KEY) throw new Error('Quản trị viên chưa cấu hình GEMINI_API_KEY trong FluentGo Config.');
+      payload.userId=account.userId;
+      enforceActionRate_(account.userId,'gemini',Number(config.AI_REQUESTS_PER_MINUTE)||6);
+      enforceActionRate_('all-users','gemini-global',Number(config.GLOBAL_AI_REQUESTS_PER_MINUTE)||60);
+      enforceDailyLimit_(account.userId,Number(config.DAILY_AI_LIMIT)||100);
+      return callGeminiWithRefresh_(payload,config);
+    }
     throw new Error('Action không hợp lệ.');
   } catch (error) {
     return { ok:false, error:String(error.message || error) };
@@ -142,14 +163,26 @@ function verifyBridgeProof_(proof,secret) {
 
 function getConfig_() {
   const cache=CacheService.getScriptCache();
-  const cached=cache.get('fluentgo_config_v2');
+  const cached=cache.get(CONFIG_CACHE_KEY);
   if (cached) try { return JSON.parse(cached); } catch (_) {}
+  const stored=PropertiesService.getScriptProperties().getProperty(CONFIG_PROPERTY_KEY);
+  if (stored) try {
+    const config=JSON.parse(stored);
+    cache.put(CONFIG_CACHE_KEY,JSON.stringify(config),CONFIG_CACHE_SECONDS);
+    return config;
+  } catch (_) {}
+  return refreshConfigFromSheet_();
+}
+
+function refreshConfigFromSheet_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(CONFIG_SHEET);
   if (!sheet) return {};
   const values = sheet.getDataRange().getDisplayValues();
   const config = {};
   for (let i=1; i<values.length; i++) if (values[i][0]) config[String(values[i][0]).trim()] = String(values[i][1] || '').trim();
-  cache.put('fluentgo_config_v2',JSON.stringify(config),120);
+  const serialized=JSON.stringify(config);
+  PropertiesService.getScriptProperties().setProperty(CONFIG_PROPERTY_KEY,serialized);
+  CacheService.getScriptCache().put(CONFIG_CACHE_KEY,serialized,CONFIG_CACHE_SECONDS);
   return config;
 }
 
@@ -314,6 +347,105 @@ function getProgress_(userId) {
     catch (_) { return {userId:String(rows[i][0]),name:String(rows[i][1]),level:String(rows[i][2]),xp:Number(rows[i][3])||0,streak:Number(rows[i][4])||0}; }
   }
   return null;
+}
+
+function promptFor_(mode,input,context,level) {
+  const shared='You are Mochi, an encouraging expert English coach for a Vietnamese learner at CEFR '+(level||'A1')+
+    '. Be specific, kind, concise and accurate. Never shame the learner. Return ONLY valid JSON without markdown. User input: '+
+    JSON.stringify(String(input||'').slice(0,5000))+'. Context: '+JSON.stringify(String(context||'').slice(0,2500))+'.';
+  if (mode==='speaking') return shared+' Listen to attached audio when present. Evaluate intelligibility, accuracy, rhythm, stress and sounds. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"English","pronunciation":"Vietnamese tip"}.';
+  if (mode==='writing') return shared+' Correct grammar, word choice, organization and naturalness while preserving meaning. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"complete corrected English","explanation":"Vietnamese"}.';
+  return shared+' Roleplay according to Context using simple English. If the input is an instruction to begin the roleplay, set score to null and review to null. Otherwise evaluate the learner sentence. Return {"reply":"1-2 short English sentences continuing the roleplay","correction":"short optional Vietnamese correction","suggestions":["short English reply 1","short English reply 2","short English reply 3"],"score":0-100,"review":{"grammar":"concise Vietnamese feedback","spelling":"concise Vietnamese feedback","naturalness":"concise Vietnamese feedback","pronunciation":"Vietnamese stress or sound tip","better_version":"natural corrected English sentence"}}.';
+}
+
+function callGeminiWithRefresh_(payload,config) {
+  try {
+    return callGemini_(payload,config);
+  } catch (error) {
+    if (!isGeminiCredentialError_(error)) throw error;
+    const refreshed=refreshConfigFromSheet_();
+    const keyChanged=String(refreshed.GEMINI_API_KEY||'')!==String(config.GEMINI_API_KEY||'');
+    const modelChanged=String(refreshed.GEMINI_MODEL||'')!==String(config.GEMINI_MODEL||'');
+    if (refreshed.GEMINI_API_KEY && (keyChanged||modelChanged)) return callGemini_(payload,refreshed);
+    throw new Error('Gemini từ chối key hoặc quyền hiện tại. Hãy cập nhật GEMINI_API_KEY trong FluentGo Config; backend sẽ tự nạp lại ở lần gọi tiếp theo.');
+  }
+}
+
+function isGeminiCredentialError_(error) {
+  const status=Number(error && error.geminiStatus)||0;
+  const message=String(error && error.message || '');
+  return [400,401,403].indexOf(status)>=0 && /API.?key|credential|authentication|unauthenticated|permission|denied|leaked|blocked/i.test(message);
+}
+
+function callGemini_(payload,config) {
+  const mode=String(payload.mode||'');
+  if (['speaking','writing','chat'].indexOf(mode)<0) throw new Error('Chế độ AI không hợp lệ.');
+  const parts=[{text:promptFor_(mode,payload.input,payload.context,payload.level)}];
+  if (mode==='speaking' && payload.audioData) {
+    if (String(payload.audioData).length>7500000) throw new Error('Đoạn ghi âm quá lớn. Hãy ghi âm ngắn hơn.');
+    parts.push({inlineData:{mimeType:String(payload.audioMime||'audio/webm').split(';')[0],data:String(payload.audioData)}});
+  }
+  const model=String(config.GEMINI_MODEL||'gemini-3.5-flash');
+  const url='https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent';
+  const response=UrlFetchApp.fetch(url,{
+    method:'post',contentType:'application/json',muteHttpExceptions:true,
+    headers:{'x-goog-api-key':String(config.GEMINI_API_KEY||'')},
+    payload:JSON.stringify({contents:[{role:'user',parts:parts}],generationConfig:{maxOutputTokens:2048,responseMimeType:'application/json'}})
+  });
+  const status=response.getResponseCode();
+  let data={};
+  try { data=JSON.parse(response.getContentText()); } catch (_) {}
+  if (status<200||status>=300) {
+    const error=new Error((data.error&&data.error.message)||('Gemini API lỗi '+status));
+    error.geminiStatus=status;
+    throw error;
+  }
+  const responseParts=data.candidates&&data.candidates[0]&&data.candidates[0].content&&data.candidates[0].content.parts||[];
+  const text=responseParts.map(function(part){return part.text||'';}).join('');
+  if (!text) throw new Error('Gemini không trả về nội dung.');
+  return Object.assign({ok:true},safeJson_(text));
+}
+
+function safeJson_(text) {
+  let value=String(text||'').trim();
+  for (let i=0;i<4;i++) {
+    if (typeof value!=='string') break;
+    const clean=value.replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+    try { value=JSON.parse(clean); continue; } catch (_) {
+      const start=clean.indexOf('{'),end=clean.lastIndexOf('}');
+      if (start>=0&&end>start) try { value=JSON.parse(clean.slice(start,end+1)); continue; } catch (__) {}
+      value=clean; break;
+    }
+  }
+  if (value&&typeof value==='object') {
+    if (typeof value.reply==='string') { const nested=safeJsonObject_(value.reply); if (nested) value=Object.assign({},value,nested); }
+    if (typeof value.text==='string'&&!value.reply) { const nestedText=safeJsonObject_(value.text); if (nestedText) value=Object.assign({},value,nestedText); }
+    return value;
+  }
+  return {text:String(value||''),reply:String(value||'')};
+}
+
+function safeJsonObject_(value) {
+  if (typeof value!=='string') return value&&typeof value==='object'?value:null;
+  const clean=String(value).replace(/^```(?:json)?\s*/i,'').replace(/\s*```$/,'').trim();
+  try { const parsed=JSON.parse(clean); return parsed&&typeof parsed==='object'?parsed:null; }
+  catch (_) {
+    const start=clean.indexOf('{'),end=clean.lastIndexOf('}');
+    if (start>=0&&end>start) try { const parsed=JSON.parse(clean.slice(start,end+1)); return parsed&&typeof parsed==='object'?parsed:null; } catch (__) {}
+    return null;
+  }
+}
+
+function enforceDailyLimit_(userId,limit) {
+  const date=Utilities.formatDate(new Date(),Session.getScriptTimeZone()||'Asia/Ho_Chi_Minh','yyyyMMdd');
+  const digest=Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(userId),Utilities.Charset.UTF_8)).slice(0,45);
+  const key='ai_daily_'+digest,properties=PropertiesService.getScriptProperties();
+  let record={date:date,count:0};
+  try { record=JSON.parse(properties.getProperty(key)||'null')||record; } catch (_) {}
+  if (record.date!==date) record={date:date,count:0};
+  if (Number(record.count)>=Math.max(1,Number(limit)||1)) throw new Error('Bạn đã dùng hết lượt AI hôm nay. Hãy quay lại vào ngày mai.');
+  record.count=Number(record.count)+1;
+  properties.setProperty(key,JSON.stringify(record));
 }
 
 function saveProgress_(data) {

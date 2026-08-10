@@ -6,10 +6,6 @@
   const USER_STORAGE_PREFIX = 'fluentgo_state_v2_';
   const SESSION_TOKEN_KEY = 'fluentgo_session_token';
   const APPS_SCRIPT_URL = String(window.FLUENTGO_CONFIG?.appsScriptUrl || '').trim();
-  let geminiApiKey = '';
-  const GEMINI_MODEL = String(window.FLUENTGO_CONFIG?.geminiModel || 'gemini-3.5-flash').trim();
-  let directGeminiReady = false;
-  const DAILY_AI_LIMIT = Math.max(1,Number(window.FLUENTGO_CONFIG?.dailyAiLimit)||100);
   const todayKey = () => new Date().toISOString().slice(0, 10);
   const defaults = {
     userId: '', username:'', name: 'Người học', email:'', level: 'A1', dailyGoal: 15,
@@ -169,29 +165,6 @@
     $('#mistakeList').html(state.mistakes.map((m,i) => `<div class="mistake-item"><span class="mistake-icon">${m.type === 'Phát âm' ? '♫' : m.type === 'Từ vựng' ? 'Aa' : '✎'}</span><div class="mistake-copy"><small>${escapeHtml(m.type)} · ${escapeHtml(m.note)}</small><p><del>${escapeHtml(m.wrong)}</del><ins>→ ${escapeHtml(m.right)}</ins></p></div><button class="review-mistake" data-index="${i}">Ôn lại</button></div>`).join(''));
   }
   function escapeHtml(value) { return $('<div>').text(value == null ? '' : String(value)).html(); }
-
-  function normalizeGeminiKey(value) {
-    return String(value||'').replace(/^\uFEFF/,'').trim().replace(/^\s*GEMINI_API_KEY\s*=\s*/i,'').replace(/^['"]|['"]$/g,'').trim();
-  }
-
-  function looksLikeGeminiKey(value) {
-    const key=normalizeGeminiKey(value);
-    return key.length>=24 && key.length<=256 && !/\s/.test(key) &&
-      !/^(DAN_|PASTE_|YOUR_|REPLACE_|CHANGE_ME)/i.test(key);
-  }
-
-  async function loadGeminiKey() {
-    const configured=normalizeGeminiKey(window.FLUENTGO_CONFIG?.geminiApiKey);
-    if (looksLikeGeminiKey(configured)) geminiApiKey=configured;
-    if (!geminiApiKey && window.FLUENTGO_CONFIG?.geminiKeyFile) {
-      try {
-        const response=await fetch(String(window.FLUENTGO_CONFIG.geminiKeyFile),{cache:'no-store'});
-        if (response.ok) { const fromFile=normalizeGeminiKey(await response.text()); if (looksLikeGeminiKey(fromFile)) geminiApiKey=fromFile; }
-      } catch (_) {}
-    }
-    directGeminiReady=looksLikeGeminiKey(geminiApiKey);
-    return directGeminiReady;
-  }
 
   function parseJsonObject(value) {
     if (typeof value !== 'string') return value && typeof value === 'object' ? value : null;
@@ -375,11 +348,11 @@
         await initBridge();
         const status = await bridgeCall('status',{});
         if (!status.ok) throw new Error(status.error || 'Apps Script chưa sẵn sàng.');
-        serverStatus = { gemini:directGeminiReady, sheets:true, mode:'bridge', model:GEMINI_MODEL };
+        serverStatus = { gemini:!!status.gemini, sheets:true, mode:'bridge', model:status.model || '' };
         renderConnectionStatus(); setAuthSystemState('ready','Hệ thống tài khoản đã sẵn sàng');
         await restoreAuth(); return;
       } catch (error) {
-        serverStatus = { gemini:directGeminiReady, sheets:false, mode:'bridge', model:GEMINI_MODEL };
+        serverStatus = { gemini:false, sheets:false, mode:'bridge', model:'' };
         renderConnectionStatus(error.message); setAuthSystemState('error',error.message); showAuthMessage(error.message); return;
       }
     }
@@ -388,7 +361,7 @@
   }
 
   function renderConnectionStatus(error) {
-    $('#aiStatus').toggleClass('offline', !serverStatus.gemini).find('span').text(serverStatus.gemini ? 'Gemini AI trực tiếp · Không qua Apps Script' : 'Chưa tải được Gemini key · Kiểm tra key_ai.txt');
+    $('#aiStatus').toggleClass('offline', !serverStatus.gemini).find('span').text(serverStatus.gemini ? 'Gemini AI · Kết nối bảo mật' : 'Gemini chưa được cấu hình trên máy chủ');
     $('#syncState').toggleClass('active', !!serverStatus.sheets).text(serverStatus.sheets ? 'Đã kết nối' : 'Cục bộ');
     $('#syncDescription').text(serverStatus.sheets ? 'Tiến độ được lưu cục bộ và đồng bộ bảo mật với Google Sheets.' : 'Tiến độ đang được lưu trên thiết bị; kết nối hệ thống chưa sẵn sàng.');
   }
@@ -502,51 +475,21 @@
   }
 
   async function askGemini(mode, input, context, extra) {
-    if (!directGeminiReady) throw new Error('Không tải được Gemini key. Hãy kiểm tra key_ai.txt, đường dẫn cấu hình và chạy trang bằng HTTP/HTTPS.');
+    if (!bridgeReady || !serverStatus.gemini) throw new Error('Gemini chưa sẵn sàng trên Apps Script. Hãy kiểm tra FluentGo Config.');
+    if (!authUser || !currentSessionToken) throw new Error('Vui lòng đăng nhập để sử dụng Gemini AI.');
     if (aiRequestInFlight) throw new Error('Mochi đang xử lý một yêu cầu khác. Vui lòng chờ một chút.');
     if (Date.now()-lastAiRequestAt<1800) throw new Error('Bạn thao tác hơi nhanh. Hãy chờ 2 giây rồi thử lại.');
-    enforceLocalAiLimit();
     aiRequestInFlight=true;
     try {
-      return normalizeAiResponse(await callGeminiDirect(mode,input,context,extra));
+      const payload={mode:mode,input:input,context:context,level:state.level};
+      if (mode==='speaking' && extra?.audioData) {
+        payload.audioData=extra.audioData;
+        payload.audioMime=extra.audioMime || 'audio/webm';
+      }
+      const result=await bridgeCall('gemini',payload);
+      if (!result || !result.ok) throw new Error(result?.error || 'Gemini chưa thể xử lý yêu cầu.');
+      return normalizeAiResponse(result);
     } finally { aiRequestInFlight=false; lastAiRequestAt=Date.now(); }
-  }
-
-  function enforceLocalAiLimit() {
-    const key='fluentgo_ai_usage_'+(state.userId||'guest'),today=todayKey();
-    let usage={date:today,count:0};
-    try { usage=JSON.parse(localStorage.getItem(key)||'null')||usage; } catch (_) {}
-    if (usage.date!==today) usage={date:today,count:0};
-    if (Number(usage.count)>=DAILY_AI_LIMIT) throw new Error('Bạn đã dùng hết lượt AI trên thiết bị hôm nay.');
-    usage.count=Number(usage.count)+1; localStorage.setItem(key,JSON.stringify(usage));
-  }
-
-  function geminiPrompt(mode,input,context) {
-    const shared='You are Mochi, an encouraging expert English coach for a Vietnamese learner at CEFR '+state.level+'. Be specific, kind, concise and accurate. Never shame the learner. Return ONLY valid JSON without markdown. User input: '+JSON.stringify(String(input||'').slice(0,5000))+'. Context: '+JSON.stringify(String(context||'').slice(0,2500))+'.';
-    if (mode==='speaking') return shared+' Listen to attached audio when present. Evaluate intelligibility, accuracy, rhythm, stress and sounds. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"English","pronunciation":"Vietnamese tip"}.';
-    if (mode==='writing') return shared+' Correct grammar, word choice, organization and naturalness while preserving meaning. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"complete corrected English","explanation":"Vietnamese"}.';
-    return shared+' Roleplay according to Context using simple English. If the input is an instruction to begin the roleplay, set score to null and review to null. Otherwise evaluate the learner sentence. Return {"reply":"1-2 short English sentences continuing the roleplay","correction":"short optional Vietnamese correction","suggestions":["short English reply 1","short English reply 2","short English reply 3"],"score":0-100,"review":{"grammar":"concise Vietnamese feedback","spelling":"concise Vietnamese feedback","naturalness":"concise Vietnamese feedback","pronunciation":"Vietnamese stress or sound tip","better_version":"natural corrected English sentence"}}.';
-  }
-
-  async function callGeminiDirect(mode,input,context,extra) {
-    const parts=[{text:geminiPrompt(mode,input,context)}];
-    if (mode==='speaking' && extra?.audioData) {
-      if (String(extra.audioData).length>7500000) throw new Error('Đoạn ghi âm quá lớn. Hãy ghi âm ngắn hơn.');
-      parts.push({inlineData:{mimeType:String(extra.audioMime||'audio/webm').split(';')[0],data:String(extra.audioData)}});
-    }
-    const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(GEMINI_MODEL)+':generateContent',{
-      method:'POST',headers:{'Content-Type':'application/json','x-goog-api-key':geminiApiKey},
-      body:JSON.stringify({contents:[{role:'user',parts}],generationConfig:{maxOutputTokens:2048,responseMimeType:'application/json'}})
-    });
-    let payload={}; try { payload=await response.json(); } catch (_) {}
-    if (!response.ok) {
-      const apiMessage=payload?.error?.message||'';
-      if (response.status===400&&/API key not valid|API_KEY_INVALID/i.test(apiMessage)) throw new Error('Gemini key bị Google từ chối. Hãy tạo API key mới tại Google AI Studio và thay nội dung key_ai.txt.');
-      throw new Error(apiMessage||('Gemini API lỗi '+response.status));
-    }
-    const text=(payload.candidates?.[0]?.content?.parts||[]).map(part=>part.text||'').join('');
-    if (!text) throw new Error('Gemini không trả về nội dung.');
-    return normalizeAiResponse({ok:true,text});
   }
 
   function showAiFeedback(selector, data, kind) {
@@ -984,7 +927,7 @@
 
   async function init() {
     if (state.lastActive !== todayKey()) state.completedToday=[];
-    await loadGeminiKey(); renderState(); renderRoadmap(state.level); updateFlashcard(); renderPractice('listening'); setupRecognition(); bindEvents(); await getStatus();
+    renderState(); renderRoadmap(state.level); updateFlashcard(); renderPractice('listening'); setupRecognition(); bindEvents(); await getStatus();
     const route=location.hash.replace('#',''); routeTo(route || 'home');
   }
 
