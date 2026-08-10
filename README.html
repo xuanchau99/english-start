@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>FluentGo &mdash; h&#x1ecd;c ti&#x1ebf;ng Anh c&ugrave;ng Gemini AI</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="fluentgo--học-tiếng-anh-cùng-gemini-ai">FluentGo — học tiếng Anh cùng Gemini AI</h1>
+<p>FluentGo là web app HTML/CSS/JavaScript/jQuery chạy trên GitHub Pages. Gemini API key và khóa nội bộ Apps Script không nằm trong giao diện hoặc mã frontend; chúng được lưu trong tab cấu hình của Google Sheet.</p>
+<h2 id="kiến-trúc-bảo-mật">Kiến trúc bảo mật</h2>
+<pre><code class="language-text">GitHub Pages → Apps Script iframe bridge → Gemini API
+                    ↓
+              Google Sheets
+</code></pre>
+<ul>
+<li>Người học không thấy và không thể thay đổi Gemini key hay Apps Script key.</li>
+<li><code>GEMINI_API_KEY</code> và <code>APP_SCRIPT_KEY</code> nằm trong tab <code>FluentGo Config</code> của cùng file Google Sheet lưu tiến độ. Bridge chỉ nhận proof HMAC tạm thời; giá trị <code>APP_SCRIPT_KEY</code> không rời Google Sheet.</li>
+<li>Apps Script gọi Gemini ở phía Google; key không được gửi xuống trình duyệt.</li>
+<li>Frontend chỉ chứa Apps Script Web App URL. URL deployment là địa chỉ endpoint công khai, không phải secret và không thể lấy từ chính Sheet vì trình duyệt cần biết URL trước khi kết nối.</li>
+<li>Có giới hạn số lượt AI theo user/ngày để giảm lạm dụng quota.</li>
+<li>Người học đăng ký bằng tên, email và mật khẩu. Apps Script tạo <code>userId</code> cố định dạng <code>usr_&lt;UUID&gt;</code>.</li>
+<li>Mật khẩu được băm lặp với salt trước khi lưu; session token 30 ngày chỉ được lưu dạng HMAC hash trong Sheet.</li>
+<li>Mọi lệnh AI và đồng bộ đều lấy <code>userId</code> từ session đã xác thực, không tin ID do frontend tự gửi.</li>
+</ul>
+<p>Quan trọng: không chia sẻ Google Sheet ở chế độ công khai. Chỉ Apps Script cần quyền truy cập Sheet.</p>
+<h2 id="thiết-lập-google-sheet-và-gemini">Thiết lập Google Sheet và Gemini</h2>
+<ol>
+<li>Tạo một Google Sheet mới.</li>
+<li>Vào <strong>Extensions → Apps Script</strong>.</li>
+<li>Chép toàn bộ <a href="./google-apps-script.gs">google-apps-script.gs</a> vào file <code>Code.gs</code>, rồi lưu.</li>
+<li>Trong Apps Script, chọn hàm <code>setupFluentGo</code> và nhấn <strong>Run</strong>. Cấp các quyền được yêu cầu.</li>
+<li>Quay lại Google Sheet. Bốn tab <code>FluentGo Config</code>, <code>FluentGo Progress</code>, <code>FluentGo Users</code> và <code>FluentGo Sessions</code> sẽ được tạo.</li>
+<li>Trong tab <code>FluentGo Config</code>, dán Gemini key vào ô <code>VALUE</code> của dòng <code>GEMINI_API_KEY</code>.</li>
+<li><code>APP_SCRIPT_KEY</code> được tạo tự động. Không cần sửa và không chia sẻ giá trị này.</li>
+<li>Có thể đổi <code>GEMINI_MODEL</code> hoặc <code>DAILY_AI_LIMIT</code> trong cùng tab.</li>
+</ol>
+<p>Tab cấu hình có dạng:</p>
+<table>
+<thead>
+<tr>
+<th>KEY</th>
+<th>VALUE</th>
+<th>MÔ TẢ</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GEMINI_API_KEY</code></td>
+<td><code>AIza...</code></td>
+<td>Key Gemini của chủ app</td>
+</tr>
+<tr>
+<td><code>APP_SCRIPT_KEY</code></td>
+<td>tự động tạo</td>
+<td>Khóa bridge nội bộ</td>
+</tr>
+<tr>
+<td><code>GEMINI_MODEL</code></td>
+<td><code>gemini-3.5-flash</code></td>
+<td>Model sử dụng</td>
+</tr>
+<tr>
+<td><code>DAILY_AI_LIMIT</code></td>
+<td><code>100</code></td>
+<td>Lượt AI mỗi user/ngày</td>
+</tr>
+</tbody>
+</table>
+<h2 id="deploy-apps-script">Deploy Apps Script</h2>
+<ol>
+<li>Trong Apps Script chọn <strong>Deploy → New deployment</strong>.</li>
+<li>Chọn loại <strong>Web app</strong>.</li>
+<li><strong>Execute as:</strong> Me.</li>
+<li><strong>Who has access:</strong> Anyone.</li>
+<li>Deploy và sao chép Web App URL kết thúc bằng <code>/exec</code>.</li>
+<li>Mở <a href="./app-config.js">app-config.js</a> và thay giá trị:</li>
+</ol>
+<pre><code class="language-javascript"><span class="hljs-attr">appsScriptUrl</span>: <span class="hljs-string">&#x27;https://script.google.com/macros/s/DEPLOYMENT_ID/exec&#x27;</span>
+</code></pre>
+<p>Khi sửa <code>google-apps-script.gs</code> sau này, vào <strong>Deploy → Manage deployments → Edit → New version → Deploy</strong> để bản đang chạy nhận code mới.</p>
+<h2 id="đăng-ký-đăng-nhập-và-tiến-độ-từng-user">Đăng ký, đăng nhập và tiến độ từng user</h2>
+<ul>
+<li>Người dùng mới chọn <strong>Tạo tài khoản</strong>, nhập tên, email và mật khẩu tối thiểu 8 ký tự.</li>
+<li>Email là duy nhất. Apps Script tạo một <code>userId</code> không đổi cho tài khoản.</li>
+<li>Khi đăng nhập thành công, trình duyệt nhận session token 30 ngày. Token gốc nằm trong <code>localStorage</code>; Google Sheet chỉ lưu token hash.</li>
+<li>Nút đăng xuất có trong menu tài khoản bên trái và trang Hồ sơ. Đăng xuất thu hồi session phía Apps Script.</li>
+<li>Khi đăng nhập trên thiết bị khác, Apps Script trả lại JSON tiến độ trong <code>FluentGo Progress</code> theo đúng <code>userId</code>.</li>
+<li>Tiến độ cục bộ được lưu riêng theo khóa <code>fluentgo_state_v2_&lt;userId&gt;</code>, vì vậy nhiều tài khoản trên cùng trình duyệt không ghi đè nhau.</li>
+<li>Khi người dùng đổi tên trong Hồ sơ, tên tài khoản được cập nhật trong <code>FluentGo Users</code> trước khi lưu tiến độ.</li>
+</ul>
+<p>Các tab dữ liệu:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>Nội dung</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>FluentGo Config</code></td>
+<td>Gemini key, Apps Script key, model và hạn mức</td>
+</tr>
+<tr>
+<td><code>FluentGo Users</code></td>
+<td>userId, email, tên, password salt/hash, trạng thái</td>
+</tr>
+<tr>
+<td><code>FluentGo Sessions</code></td>
+<td>session token hash, userId và ngày hết hạn</td>
+</tr>
+<tr>
+<td><code>FluentGo Progress</code></td>
+<td>XP, streak, level và toàn bộ JSON tiến độ theo userId</td>
+</tr>
+</tbody>
+</table>
+<p>Không chỉnh sửa thủ công <code>passwordSalt</code>, <code>passwordHash</code> hoặc <code>tokenHash</code>. Có thể khóa tài khoản bằng cách đổi cột <code>status</code> của user thành <code>disabled</code>.</p>
+<h2 id="deploy-github-pages">Deploy GitHub Pages</h2>
+<ol>
+<li>Commit <code>index.html</code>, <code>styles.css</code>, <code>app.js</code>, <code>app-config.js</code>, <code>assets/</code> và các file cần thiết.</li>
+<li>Không commit <code>key_ai.txt</code> hoặc bất kỳ file nào chứa Gemini key.</li>
+<li>Vào repository <strong>Settings → Pages</strong>.</li>
+<li>Chọn <strong>Deploy from a branch</strong>, branch <code>main</code>, thư mục <code>/ (root)</code>.</li>
+<li>Mở URL <code>https://username.github.io/repository/</code>.</li>
+</ol>
+<p>Ứng dụng dùng đường dẫn tương đối nên hoạt động trong subpath của GitHub Pages. Có thể mở trực tiếp <code>index.html</code>, nhưng microphone và một số API trình duyệt hoạt động ổn định hơn qua HTTPS của GitHub Pages.</p>
+<h2 id="dữ-liệu-được-lưu">Dữ liệu được lưu</h2>
+<ul>
+<li><code>localStorage</code>: session token và tiến độ riêng của tài khoản trên thiết bị.</li>
+<li><code>FluentGo Progress</code>: mỗi <code>userId</code> có một dòng, được cập nhật sau hoạt động học.</li>
+<li><code>FluentGo Config</code>: cấu hình riêng của chủ app, không được trả về frontend.</li>
+<li><code>FluentGo Users</code> và <code>FluentGo Sessions</code>: tài khoản và phiên đăng nhập dạng hash.</li>
+</ul>
+<h2 id="các-file-chính">Các file chính</h2>
+<pre><code class="language-text">index.html                 Giao diện ứng dụng
+styles.css                 Giao diện responsive
+app.js                     Bài tập, speech, state và Apps Script bridge
+app-config.js              Web App URL công khai của Apps Script
+google-apps-script.gs      Gemini proxy + lưu Sheets + cấu hình bí mật
+assets/mochi.png           Mascot Mochi
+</code></pre>
+<h2 id="kiểm-tra-cú-pháp">Kiểm tra cú pháp</h2>
+<pre><code class="language-powershell">npm run check
+</code></pre>
+<p>Tài liệu tham khảo: <a href="https://ai.google.dev/gemini-api/docs/text-generation">Gemini text generation</a>, <a href="https://ai.google.dev/gemini-api/docs/audio">Gemini audio understanding</a>.</p>
+
+            
+            
+        </body>
+        </html>

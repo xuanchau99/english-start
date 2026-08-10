@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#5b4cf0">
+  <meta name="description" content="FluentGo - Luyện tiếng Anh mỗi ngày cùng AI">
+  <title>FluentGo · Học tiếng Anh cùng Mochi</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="assets/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=20260810-5">
+</head>
+<body>
+  <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
+    <div class="auth-visual">
+      <a class="brand auth-brand" href="#"><span class="brand-mark">F</span><span>Fluent<span>Go</span></span></a>
+      <div class="auth-copy">
+        <span class="auth-kicker">HỌC MỖI NGÀY · TIẾN BỘ MỖI NGÀY</span>
+        <h1>Tiếng Anh dễ hơn<br>khi có <em>Mochi</em> bên cạnh.</h1>
+        <p>Lộ trình riêng, bài tập thú vị và AI góp ý ngay khi bạn cần.</p>
+        <div class="auth-benefits"><span>✓ Lưu tiến độ đa thiết bị</span><span>✓ AI sửa nói & viết</span><span>✓ Lộ trình từ A1 đến B2</span></div>
+      </div>
+      <img src="assets/mochi.png" class="auth-mascot" alt="Mochi chào đón bạn">
+      <i class="auth-orb orb-one"></i><i class="auth-orb orb-two"></i>
+    </div>
+    <div class="auth-panel">
+      <div class="auth-card">
+        <div class="auth-mobile-brand"><span class="brand-mark">F</span><strong>FluentGo</strong></div>
+        <div class="auth-tabs" role="tablist">
+          <button class="active" data-auth-tab="login">Đăng nhập</button>
+          <button data-auth-tab="register">Tạo tài khoản</button>
+        </div>
+        <div class="auth-system-state" id="authSystemState"><i></i><span>Đang kết nối hệ thống...</span></div>
+        <form class="auth-form active" id="loginForm" novalidate>
+          <div class="auth-heading"><span>CHÀO MỪNG TRỞ LẠI</span><h2 id="authTitle">Tiếp tục hành trình nhé!</h2><p>Đăng nhập để học tiếp từ nơi bạn đã dừng.</p></div>
+          <label>Username hoặc email<input id="loginIdentifier" type="text" autocomplete="username" placeholder="minhan hoặc ban@email.com" required></label>
+          <label>Mật khẩu<div class="password-field"><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Tối thiểu 8 ký tự" required><button type="button" class="toggle-password" aria-label="Hiện mật khẩu">◉</button></div></label>
+          <button class="primary-btn wide auth-submit" type="submit"><span>Đăng nhập</span><i>→</i></button>
+          <p class="auth-switch">Chưa có tài khoản? <button type="button" data-auth-tab="register">Đăng ký miễn phí</button></p>
+        </form>
+        <form class="auth-form" id="registerForm" novalidate>
+          <div class="auth-heading"><span>BẮT ĐẦU MIỄN PHÍ</span><h2>Tạo tài khoản mới</h2><p>Chỉ mất một phút để bắt đầu lộ trình của riêng bạn.</p></div>
+          <label>Tên của bạn<input id="registerName" type="text" autocomplete="name" maxlength="60" placeholder="Nguyễn Minh An" required></label>
+          <label>Username<input id="registerUsername" type="text" autocomplete="username" maxlength="24" placeholder="minhan" pattern="[A-Za-z0-9._]{3,24}" required><small>3–24 ký tự: chữ, số, dấu chấm hoặc gạch dưới.</small></label>
+          <label>Email<input id="registerEmail" type="email" autocomplete="email" placeholder="ban@email.com" required></label>
+          <label>Mật khẩu<div class="password-field"><input id="registerPassword" type="password" autocomplete="new-password" minlength="8" placeholder="Ít nhất 8 ký tự" required><button type="button" class="toggle-password" aria-label="Hiện mật khẩu">◉</button></div></label>
+          <label class="terms-check"><input id="acceptTerms" type="checkbox" required><span>Tôi đồng ý lưu tiến độ học tập trong Google Sheets của FluentGo.</span></label>
+          <button class="primary-btn wide auth-submit" type="submit"><span>Tạo tài khoản</span><i>→</i></button>
+          <p class="auth-switch">Đã có tài khoản? <button type="button" data-auth-tab="login">Đăng nhập</button></p>
+        </form>
+        <div class="auth-message" id="authMessage" role="alert"></div>
+        <small class="auth-security">🔒 Mật khẩu được băm trước khi lưu. Gemini API key không được gửi tới trình duyệt.</small>
+      </div>
+    </div>
+  </section>
+
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Điều hướng chính">
+      <a class="brand" href="#home" data-route="home" aria-label="FluentGo - Trang chủ">
+        <span class="brand-mark">F</span>
+        <span>Fluent<span>Go</span></span>
+      </a>
+
+      <nav class="side-nav">
+        <button class="nav-item active" data-route="home"><span class="nav-icon">⌂</span><span>Hôm nay</span></button>
+        <button class="nav-item" data-route="learn"><span class="nav-icon">♧</span><span>Lộ trình</span></button>
+        <button class="nav-item" data-route="practice"><span class="nav-icon">◎</span><span>Luyện tập</span></button>
+        <button class="nav-item" data-route="review"><span class="nav-icon">↻</span><span>Ôn tập</span><span class="nav-badge">6</span></button>
+        <button class="nav-item" data-route="profile"><span class="nav-icon">♙</span><span>Hồ sơ</span></button>
+      </nav>
+
+      <div class="sidebar-plan">
+        <div class="plan-ring" style="--progress: 65"><span>65%</span></div>
+        <div>
+          <strong>Mục tiêu tuần</strong>
+          <p><span id="sideWeekMinutes">78</span> / 120 phút</p>
+        </div>
+      </div>
+
+      <div class="sidebar-foot">
+        <button class="icon-btn open-settings" aria-label="Cài đặt">⚙</button>
+        <div class="mini-avatar">AN</div>
+        <div class="mini-user"><strong id="sideUserName">An</strong><span>Người học</span></div>
+        <button class="icon-btn logout-action" aria-label="Đăng xuất" title="Đăng xuất">↪</button>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div class="mobile-brand"><span class="brand-mark">F</span><strong>FluentGo</strong></div>
+        <div class="topbar-spacer"></div>
+        <button class="pill-stat" title="Chuỗi học"><span>🔥</span><strong id="headerStreak">7</strong></button>
+        <button class="pill-stat" title="Điểm kinh nghiệm"><span>⚡</span><strong id="headerXp">1,240</strong></button>
+        <button class="round-btn" id="notificationBtn" aria-label="Thông báo">♢<i></i></button>
+        <button class="mobile-avatar" data-route="profile" aria-label="Hồ sơ">AN</button>
+      </header>
+
+      <div class="page-container">
+        <section class="view active" id="view-home">
+          <div class="reminder-banner" id="reminderBanner">
+            <span class="reminder-icon">⏰</span>
+            <div><strong>Giữ nhịp học hôm nay nhé!</strong><span>Bạn còn 2 nhiệm vụ để hoàn thành mục tiêu ngày.</span></div>
+            <button class="text-btn start-next">Học ngay</button>
+            <button class="dismiss-btn" aria-label="Ẩn nhắc nhở">×</button>
+          </div>
+
+          <section class="hero-card">
+            <div class="hero-copy">
+              <span class="eyebrow"><i></i> LỘ TRÌNH CÁ NHÂN · NGÀY 12</span>
+              <h1>Chào buổi sáng, <span id="heroName">An</span>! <span class="wave">👋</span></h1>
+              <p>Chỉ 15 phút nữa để tiến gần hơn tới mục tiêu. Mochi đã chuẩn bị bài học mới cho bạn rồi!</p>
+              <div class="hero-actions">
+                <button class="primary-btn start-next"><span>▶</span> Tiếp tục học</button>
+                <span class="time-note"><i>◷</i> Khoảng 15 phút</span>
+              </div>
+            </div>
+            <div class="hero-visual">
+              <div class="speech-bubble"><strong>Let's go!</strong><span>Bạn làm được mà ✨</span></div>
+              <div class="mascot-glow"></div>
+              <img src="assets/mochi.png" alt="Mochi - linh vật gấu trúc đỏ đang vẫy tay" class="mascot-img">
+              <span class="float-chip chip-a">A+</span><span class="float-chip chip-b">Hi!</span><span class="float-chip chip-c">★</span>
+            </div>
+          </section>
+
+          <div class="section-heading">
+            <div><span class="section-kicker">KẾ HOẠCH HÔM NAY</span><h2>Những bước nhỏ, tiến bộ lớn</h2></div>
+            <span class="goal-label"><b id="doneTodayCount">1</b>/3 đã xong</span>
+          </div>
+
+          <div class="daily-grid" id="dailyTasks">
+            <article class="task-card completed" data-lesson="warmup">
+              <div class="task-icon purple">✓</div>
+              <div class="task-main"><span class="task-type">KHỞI ĐỘNG · 5 PHÚT</span><h3>Ôn lại từ vựng</h3><p>6 từ đang chờ bạn ghi nhớ</p><div class="mini-progress"><i style="width:100%"></i></div></div>
+              <span class="task-xp earned">+10 XP</span>
+              <button class="circle-action" aria-label="Ôn lại">↻</button>
+            </article>
+            <article class="task-card current" data-lesson="daily">
+              <div class="task-icon coral">▤</div>
+              <div class="task-main"><span class="task-type">BÀI HỌC CHÍNH · 10 PHÚT</span><h3>Chào hỏi & Giới thiệu</h3><p>Học cách bắt đầu một cuộc trò chuyện</p><div class="mini-progress"><i style="width:35%"></i></div></div>
+              <span class="task-xp">+25 XP</span>
+              <button class="circle-action primary start-next" aria-label="Bắt đầu">→</button>
+            </article>
+            <article class="task-card locked" data-lesson="speaking">
+              <div class="task-icon mint">♬</div>
+              <div class="task-main"><span class="task-type">LUYỆN NÓI · 5 PHÚT</span><h3>Nói cùng Mochi</h3><p>AI nhận xét phát âm của bạn</p></div>
+              <span class="task-xp">+15 XP</span>
+              <button class="circle-action open-practice" data-practice="speaking" aria-label="Luyện nói">→</button>
+            </article>
+          </div>
+
+          <div class="dashboard-lower">
+            <section class="panel week-panel">
+              <div class="panel-title"><div><span class="section-kicker">HOẠT ĐỘNG</span><h3>Tuần này của bạn</h3></div><span class="trend">↗ 18%</span></div>
+              <div class="week-chart" id="weekChart"></div>
+              <div class="chart-summary"><div><span>Thời gian học</span><strong><b id="weekMinutes">78</b> phút</strong></div><div><span>Điểm đã nhận</span><strong><b>320</b> XP</strong></div></div>
+            </section>
+            <section class="panel streak-panel">
+              <div class="streak-top"><span class="big-fire">🔥</span><div><span class="section-kicker">CHUỖI HIỆN TẠI</span><h3><b id="streakDays">7</b> ngày liên tục!</h3></div></div>
+              <p>Tuyệt vời! Học thêm hôm nay để giữ ngọn lửa luôn cháy.</p>
+              <div class="streak-days" id="streakCalendar"></div>
+              <div class="streak-record"><span>🏆 Kỷ lục của bạn</span><strong>12 ngày</strong></div>
+            </section>
+          </div>
+
+          <section class="quick-practice">
+            <div class="section-heading compact"><div><span class="section-kicker">LUYỆN NHANH</span><h2>Chọn kỹ năng bạn muốn cải thiện</h2></div><button class="text-btn" data-route="practice">Xem tất cả →</button></div>
+            <div class="skill-grid">
+              <button class="skill-card open-practice" data-practice="listening"><span class="skill-icon lavender">♫</span><span><strong>Nghe</strong><small>Hội thoại đời thường</small></span><i>→</i></button>
+              <button class="skill-card open-practice" data-practice="speaking"><span class="skill-icon peach">◉</span><span><strong>Nói</strong><small>AI sửa phát âm</small></span><i>→</i></button>
+              <button class="skill-card open-practice" data-practice="reading"><span class="skill-icon blue">▥</span><span><strong>Đọc</strong><small>Truyện ngắn thú vị</small></span><i>→</i></button>
+              <button class="skill-card open-practice" data-practice="writing"><span class="skill-icon mint">✎</span><span><strong>Viết</strong><small>Nhận xét bởi Gemini</small></span><i>→</i></button>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="view-learn">
+          <div class="page-title-row">
+            <div><span class="section-kicker">LỘ TRÌNH CỦA BẠN</span><h1>Bản đồ chinh phục tiếng Anh</h1><p>Mỗi ngày một chặng nhỏ, từng bước tiến đến giao tiếp tự tin.</p></div>
+            <button class="level-picker" id="levelPicker"><span>Trình độ hiện tại</span><strong>A1 · Beginner⌄</strong></button>
+          </div>
+          <div class="level-tabs" id="levelTabs">
+            <button class="active" data-level="A1">A1 <span>Khởi đầu</span></button>
+            <button data-level="A2">A2 <span>Cơ bản</span></button>
+            <button data-level="B1">B1 <span>Trung cấp</span></button>
+            <button data-level="B2">B2 <span>Nâng cao</span></button>
+          </div>
+          <section class="roadmap-card">
+            <div class="unit-header">
+              <div class="unit-number">01</div>
+              <div><span id="roadmapStage">CHẶNG A1 · HỌC THEO NHỊP CỦA BẠN</span><h2 id="roadmapTitle">Nền tảng giao tiếp</h2><p id="roadmapDescription">Hoàn thành bài hiện tại để mở bài tiếp theo, không giới hạn số bài mỗi ngày.</p></div>
+              <div class="unit-progress"><div class="plan-ring" id="roadmapRing" style="--progress:0"><span>0%</span></div><small id="roadmapCount">0/9 bài</small></div>
+            </div>
+            <div class="roadmap" id="roadmap"></div>
+          </section>
+          <section class="next-unit">
+            <div class="unit-number muted">∞</div><div><span>HỌC KHÔNG GIỚI HẠN THEO NGÀY</span><h3>Đi xa hơn kế hoạch hôm nay</h3><p>Sau mỗi bài, bài tiếp theo mở ngay. Bạn vẫn nhận XP và tiến độ được lưu bình thường.</p></div><span class="lock-pill">Tự học theo nhịp riêng</span>
+          </section>
+        </section>
+
+        <section class="view" id="view-practice">
+          <div class="page-title-row">
+            <div><span class="section-kicker">PHÒNG LUYỆN TẬP · <b id="practiceLevelLabel">A1</b></span><h1>Bạn muốn luyện gì?</h1><p>Mỗi trình độ có nhiều bộ bài. Hoàn thành một câu để mở câu tiếp theo.</p></div>
+            <div class="practice-head-actions"><select id="practiceLevelSelect" aria-label="Chọn trình độ luyện tập"><option>A1</option><option>A2</option><option>B1</option><option>B2</option></select><div class="ai-status" id="aiStatus"><i></i><span>Đang kiểm tra Gemini AI...</span></div></div>
+          </div>
+          <div class="practice-layout">
+            <div class="practice-menu" role="tablist">
+              <button class="practice-tab active" data-practice="listening"><span class="skill-icon lavender">♫</span><span><strong>Luyện nghe</strong><small>Nghe & chọn đáp án</small></span></button>
+              <button class="practice-tab" data-practice="speaking"><span class="skill-icon peach">◉</span><span><strong>Luyện nói</strong><small>Chấm phát âm với AI</small></span></button>
+              <button class="practice-tab" data-practice="reading"><span class="skill-icon blue">▥</span><span><strong>Luyện đọc</strong><small>Đọc hiểu ngữ cảnh</small></span></button>
+              <button class="practice-tab" data-practice="writing"><span class="skill-icon mint">✎</span><span><strong>Luyện viết</strong><small>AI sửa ngữ pháp</small></span></button>
+              <button class="practice-tab" data-practice="vocabulary"><span class="skill-icon yellow">Aa</span><span><strong>Từ vựng</strong><small>Flashcard thông minh</small></span></button>
+              <button class="practice-tab" data-practice="chat"><span class="skill-icon pink">✦</span><span><strong>Chat cùng Mochi</strong><small>Hội thoại tự do</small></span></button>
+            </div>
+
+            <div class="practice-stage">
+              <section class="practice-pane active" id="practice-listening">
+                <div class="exercise-head"><span class="exercise-label" id="listeningLevel">NGHE · A1</span><span id="listeningProgress">Câu 1 / 3</span></div>
+                <h2 id="listeningQuestion">Bạn nghe thấy điều gì?</h2><p>Nghe đoạn hội thoại và chọn đáp án đúng nhất.</p>
+                <div class="audio-card">
+                  <button class="audio-play" id="playListening" aria-label="Phát đoạn nghe">▶</button>
+                  <div class="audio-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  <button class="speed-btn" id="audioSpeed">1×</button>
+                </div>
+                <button class="transcript-toggle hidden" id="showListeningTranscript">▤ Xem transcript</button>
+                <div class="listening-transcript hidden" id="listeningTranscript"></div>
+                <div class="answer-list" id="listeningAnswers"></div>
+                <div class="exercise-feedback" id="listeningFeedback"></div>
+                <button class="primary-btn wide practice-next hidden" id="nextListening">Câu tiếp theo →</button>
+                <div class="session-summary hidden" id="listeningSummary"></div>
+              </section>
+
+              <section class="practice-pane" id="practice-speaking">
+                <div class="exercise-head"><span class="exercise-label coral-label" id="speakingLevel">NÓI · A1 · AI COACH</span><span id="speakingProgress">Câu 1 / 3</span></div>
+                <h2>Đọc câu này thành tiếng</h2><p>Nhấn micro và nói tự nhiên. Mochi sẽ nghe và góp ý cho bạn.</p>
+                <div class="sentence-card">
+                  <button class="tiny-sound" id="playSpeakingSample">♫</button>
+                  <div><small>CÂU MẪU</small><strong id="speakingTarget">“Hi, my name is An. Nice to meet you!”</strong><span id="speakingMeaning">Xin chào, mình tên An. Rất vui được gặp bạn!</span></div>
+                </div>
+                <div class="record-area">
+                  <button class="record-btn" id="recordBtn"><span>●</span></button>
+                  <strong id="recordLabel">Chạm để bắt đầu nói</strong><small>Cho phép trình duyệt sử dụng microphone</small>
+                  <div class="live-transcript" id="liveTranscript">Lời bạn nói sẽ xuất hiện tại đây...</div>
+                </div>
+                <button class="primary-btn wide hidden" id="analyzeSpeech">✦ Nhờ Gemini nhận xét</button>
+                <div class="ai-feedback-card" id="speechFeedback"></div>
+                <button class="secondary-btn wide practice-next hidden" id="nextSpeaking">Luyện câu tiếp theo →</button>
+              </section>
+
+              <section class="practice-pane" id="practice-reading">
+                <div class="exercise-head"><span class="exercise-label blue-label" id="readingLevel">ĐỌC · A1</span><span id="readingProgress">Bài 1 / 3</span></div>
+                <h2 id="readingTitle">Một buổi sáng của Mia</h2>
+                <div class="reading-card">
+                  <p id="readingPassage">Every morning, Mia wakes up at seven o'clock.</p>
+                  <button class="read-aloud" id="readPassage">♫ Nghe bài đọc</button>
+                </div>
+                <h3 class="question-title" id="readingQuestion">Why does Mia like mornings?</h3>
+                <div class="answer-list" id="readingAnswers"></div>
+                <div class="exercise-feedback" id="readingFeedback"></div>
+                <button class="primary-btn wide practice-next hidden" id="nextReading">Bài tiếp theo →</button>
+                <div class="session-summary hidden" id="readingSummary"></div>
+              </section>
+
+              <section class="practice-pane" id="practice-writing">
+                <div class="exercise-head"><span class="exercise-label mint-label" id="writingLevel">VIẾT · A1 · AI COACH</span><span id="writingProgress">Đề 1 / 3</span></div>
+                <h2 id="writingTitle">Giới thiệu về bản thân</h2><p id="writingInstruction">Viết 3–5 câu bằng tiếng Anh.</p>
+                <div class="prompt-chips" id="writingChips"></div>
+                <div class="writing-box"><textarea id="writingInput" maxlength="500" placeholder="Hi! My name is An. I live in..."></textarea><span><b id="writingCount">0</b>/500</span></div>
+                <button class="primary-btn wide" id="checkWriting">✦ Nhờ Gemini sửa bài</button>
+                <div class="ai-feedback-card" id="writingFeedback"></div>
+                <button class="secondary-btn wide practice-next hidden" id="nextWriting">Đề tiếp theo →</button>
+              </section>
+
+              <section class="practice-pane" id="practice-vocabulary">
+                <div class="exercise-head"><span class="exercise-label yellow-label" id="vocabularyLevel">TỪ VỰNG · A1</span><span id="flashCount">1 / 6</span></div>
+                <h2>Chạm thẻ để xem nghĩa</h2><p>Ôn các từ quan trọng trong bài học hôm nay.</p>
+                <div class="flashcard" id="flashcard" tabindex="0" role="button" aria-label="Lật thẻ từ">
+                  <div class="flash-inner"><div class="flash-front"><span>👋</span><strong id="flashWord">greet</strong><small>/ɡriːt/ · verb</small><p>Tap to reveal</p></div><div class="flash-back"><span>GREET</span><strong id="flashMeaning">chào hỏi</strong><p id="flashExample">She greeted me with a smile.</p><small>Cô ấy mỉm cười chào tôi.</small></div></div>
+                </div>
+                <div class="flash-actions"><button class="secondary-btn" data-memory="hard">Chưa nhớ</button><button class="primary-btn" data-memory="easy">Đã nhớ</button></div>
+                <div class="session-summary hidden" id="vocabularySummary"></div>
+              </section>
+
+              <section class="practice-pane" id="practice-chat">
+                <div class="conversation-setup" id="conversationSetup">
+                  <div class="exercise-head"><span class="exercise-label pink-label">HỘI THOẠI AI · <b class="current-chat-level">A1</b></span><span class="online-dot">● Gemini sẵn sàng</span></div>
+                  <div class="conversation-intro"><div><h2>Bạn muốn luyện tình huống gì?</h2><p>Chọn một chủ đề hoặc tự mô tả cuộc hội thoại bạn muốn luyện.</p></div><img src="assets/mochi.png" alt="Mochi AI"></div>
+                  <label class="custom-scenario"><span>✦ TÌNH HUỐNG CỦA BẠN</span><input id="customScenario" maxlength="180" placeholder="Ví dụ: Gọi cà phê, hỏi đường, phỏng vấn bằng tiếng Anh..."><small><b id="scenarioCount">0</b>/180</small></label>
+                  <div class="scenario-groups" id="scenarioGroups">
+                    <div class="scenario-group"><h3><i class="life-dot"></i>Đời sống</h3><div><button data-scenario="Gọi cà phê ở quán" data-ai-role="nhân viên quán cà phê" data-user-role="khách hàng">☕ Gọi cà phê</button><button data-scenario="Gọi món tại nhà hàng" data-ai-role="nhân viên phục vụ" data-user-role="khách hàng">🍜 Gọi món nhà hàng</button><button data-scenario="Mua quà sinh nhật" data-ai-role="nhân viên cửa hàng" data-user-role="khách mua quà">🎁 Đi mua quà</button><button data-scenario="Làm quen một người bạn mới" data-ai-role="người bạn mới" data-user-role="người bắt chuyện">👋 Làm quen bạn mới</button></div></div>
+                    <div class="scenario-group"><h3><i class="work-dot"></i>Công việc</h3><div><button data-scenario="Phỏng vấn xin việc" data-ai-role="nhà tuyển dụng" data-user-role="ứng viên">💼 Phỏng vấn việc làm</button><button data-scenario="Họp nhóm với đồng nghiệp" data-ai-role="đồng nghiệp phụ trách dự án" data-user-role="thành viên nhóm">👥 Họp với đồng nghiệp</button><button data-scenario="Trình bày một ý tưởng mới" data-ai-role="quản lý" data-user-role="nhân viên trình bày">📊 Trình bày ý tưởng</button></div></div>
+                    <div class="scenario-group"><h3><i class="study-dot"></i>Học tập</h3><div><button data-scenario="Hỏi giáo viên về bài tập" data-ai-role="giáo viên tiếng Anh" data-user-role="học sinh">📚 Hỏi về bài tập</button><button data-scenario="Thuyết trình trước lớp" data-ai-role="giáo viên đang lắng nghe" data-user-role="học sinh thuyết trình">🎓 Thuyết trình</button><button data-scenario="Thảo luận bài tập nhóm" data-ai-role="bạn cùng nhóm" data-user-role="thành viên nhóm">✏️ Học nhóm</button></div></div>
+                    <div class="scenario-group"><h3><i class="travel-dot"></i>Du lịch</h3><div><button data-scenario="Nhận phòng khách sạn" data-ai-role="lễ tân khách sạn" data-user-role="du khách">🏨 Nhận phòng khách sạn</button><button data-scenario="Hỏi đường đến một địa điểm" data-ai-role="người dân địa phương" data-user-role="du khách">🗺️ Hỏi đường</button><button data-scenario="Làm thủ tục tại sân bay" data-ai-role="nhân viên sân bay" data-user-role="hành khách">✈️ Tại sân bay</button></div></div>
+                  </div>
+                  <div class="conversation-options">
+                    <div><strong>Ai nói trước?</strong><small>Bạn có thể chủ động hoặc để Mochi mở đầu.</small></div>
+                    <div class="speaker-toggle" id="speakerToggle"><button class="active" data-first="user">♙ Bạn</button><button data-first="ai">✦ AI</button></div>
+                  </div>
+                  <button class="primary-btn wide start-conversation" id="startConversation" disabled><span>◉</span> Bắt đầu hội thoại</button>
+                </div>
+
+                <div class="conversation-room hidden" id="conversationRoom">
+                  <div class="conversation-room-head"><button id="backToScenarios" aria-label="Chọn lại tình huống">←</button><div><span>ĐANG LUYỆN CÙNG MOCHI</span><h2 id="activeScenarioTitle">Hội thoại AI</h2><small><i></i><span id="conversationTurnCount">0 lượt nói</span> · <span class="current-chat-level">A1</span></small></div><button class="end-conversation" id="endConversation">Kết thúc</button></div>
+                  <div class="role-strip"><span id="userRoleLabel">Bạn: người học</span><i>↔</i><span id="aiRoleLabel">Mochi: người đối thoại</span><button id="toggleAiVoice" class="active" title="Bật/tắt giọng AI">♫</button></div>
+                  <div class="chat-box conversation-chat" id="chatMessages"></div>
+                  <div class="quick-replies" id="quickReplies"></div>
+                  <div class="chat-input conversation-input"><button id="chatMic" class="chat-mic" aria-label="Nhập bằng giọng nói" aria-pressed="false" title="Nhập bằng giọng nói"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg><span class="mic-ripple" aria-hidden="true"></span></button><input id="chatInput" autocomplete="off" maxlength="500" placeholder="Trả lời bằng tiếng Anh..."><button id="sendChat" aria-label="Gửi">➤</button></div>
+                  <p class="conversation-tip">Mochi sẽ sửa lỗi nhẹ nhàng sau mỗi câu và gợi ý cách trả lời tự nhiên hơn.</p>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-review">
+          <div class="page-title-row"><div><span class="section-kicker">ÔN TẬP THÔNG MINH</span><h1>Biến lỗi sai thành tiến bộ</h1><p>Những nội dung sắp quên sẽ được ưu tiên để bạn ghi nhớ lâu hơn.</p></div><button class="primary-btn" id="reviewAll">↻ Ôn tất cả</button></div>
+          <div class="review-stats"><div><span>🧠</span><div><strong>24</strong><small>Từ đã nhớ</small></div></div><div><span>⏳</span><div><strong>6</strong><small>Cần ôn hôm nay</small></div></div><div><span>🎯</span><div><strong>86%</strong><small>Độ chính xác</small></div></div></div>
+          <section class="panel mistake-panel"><div class="panel-title"><div><span class="section-kicker">SỔ TAY LỖI SAI</span><h3>Gemini gợi ý ôn lại</h3></div><span class="ai-chip">✦ AI chọn lọc</span></div><div id="mistakeList" class="mistake-list"></div></section>
+        </section>
+
+        <section class="view" id="view-profile">
+          <div class="profile-hero">
+            <div class="profile-avatar">AN<span>✎</span></div><div><span class="section-kicker">HỒ SƠ NGƯỜI HỌC</span><h1 id="profileName">An Nguyễn</h1><p><span id="profileUsername">@username</span> · <span id="profileEmail">Tài khoản FluentGo</span> · <span id="profileLevel">A1 Beginner</span></p></div><div class="profile-actions"><button class="secondary-btn open-settings">Chỉnh sửa hồ sơ</button><button class="secondary-btn danger-outline logout-action">Đăng xuất</button></div>
+          </div>
+          <div class="profile-grid">
+            <section class="panel"><div class="panel-title"><h3>Thành tích của bạn</h3></div><div class="achievement-grid"><div><span>🔥</span><strong>Rực lửa</strong><small>7 ngày liên tục</small></div><div><span>⚡</span><strong>Tia chớp</strong><small>1,240 XP</small></div><div><span>🎤</span><strong>Tự tin nói</strong><small>20 bài nói</small></div><div class="locked-achievement"><span>🏆</span><strong>Bền bỉ</strong><small>Học 30 ngày</small></div></div></section>
+            <section class="panel"><div class="panel-title"><h3>Mục tiêu cá nhân</h3><button class="text-btn open-settings">Thay đổi</button></div><div class="goal-row"><span>⏱</span><div><small>Mỗi ngày</small><strong>15 phút</strong></div></div><div class="goal-row"><span>🎯</span><div><small>Mục tiêu</small><strong>Giao tiếp tự tin</strong></div></div><div class="goal-row"><span>📅</span><div><small>Lịch học</small><strong>7 ngày / tuần</strong></div></div></section>
+          </div>
+          <section class="panel sync-panel"><div class="sync-icon">☁</div><div><h3>Đồng bộ Google Sheets</h3><p id="syncDescription">Tiến độ đang được lưu an toàn trên thiết bị này.</p></div><span class="sync-state" id="syncState">Cục bộ</span><button class="secondary-btn" id="syncNow">Đồng bộ ngay</button></section>
+        </section>
+      </div>
+    </main>
+
+    <nav class="bottom-nav" aria-label="Điều hướng di động">
+      <button class="active" data-route="home"><span>⌂</span>Hôm nay</button><button data-route="learn"><span>♧</span>Lộ trình</button><button data-route="practice"><span>◎</span>Luyện tập</button><button data-route="review"><span>↻</span>Ôn tập</button><button data-route="profile"><span>♙</span>Hồ sơ</button>
+    </nav>
+  </div>
+
+  <div class="modal-backdrop" id="lessonModal" aria-hidden="true">
+    <div class="lesson-modal" role="dialog" aria-modal="true" aria-labelledby="lessonTitle">
+      <div class="modal-top"><button class="close-modal" aria-label="Đóng">×</button><div class="lesson-progress"><i id="lessonProgressBar"></i></div><span id="lessonStepLabel">1 / 5</span><span class="heart-count">♥ 5</span></div>
+      <div class="lesson-content" id="lessonContent"></div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="settingsModal" aria-hidden="true">
+    <div class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <div class="settings-head"><div><span class="section-kicker">CÁ NHÂN HÓA</span><h2 id="settingsTitle">Cài đặt học tập</h2></div><button class="close-settings">×</button></div>
+      <label>Họ tên<input id="settingName" type="text" value="An Nguyễn"></label>
+      <label>Trình độ<select id="settingLevel"><option>A1 · Người mới bắt đầu</option><option>A2 · Cơ bản</option><option>B1 · Trung cấp</option><option>B2 · Trên trung cấp</option></select></label>
+      <label>Mục tiêu mỗi ngày<select id="settingGoal"><option value="10">10 phút · Nhẹ nhàng</option><option value="15" selected>15 phút · Đều đặn</option><option value="25">25 phút · Quyết tâm</option><option value="40">40 phút · Chuyên sâu</option></select></label>
+      <div class="settings-note"><span>⚙️</span><p><strong>Cấu hình do chủ ứng dụng thiết lập</strong><br>Gemini được gọi trực tiếp bằng key trong app-config.js; Apps Script chỉ xử lý tài khoản và tiến độ Google Sheets.</p></div>
+      <button class="primary-btn wide" id="saveSettings">Lưu thay đổi</button>
+    </div>
+  </div>
+
+  <div class="level-menu" id="levelMenu">
+    <button data-level="A1"><b>A1</b><span>Khởi đầu</span><i>✓</i></button><button data-level="A2"><b>A2</b><span>Cơ bản</span></button><button data-level="B1"><b>B1</b><span>Trung cấp</span></button><button data-level="B2"><b>B2</b><span>Nâng cao</span></button>
+  </div>
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+  <div class="confetti" id="confetti"></div>
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+  <script src="app-config.js"></script>
+  <script src="app.js?v=20260810-5"></script>
+</body>
+</html>

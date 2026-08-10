@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <title>FluentGo &mdash; Ph&acirc;n t&iacute;ch Business Analyst v&agrave; k&#x1ebf; ho&#x1ea1;ch s&#x1ea3;n ph&#x1ea9;m</title>
+            <style>
+/* From extension vscode.github */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+.vscode-dark img[src$=\#gh-light-mode-only],
+.vscode-light img[src$=\#gh-dark-mode-only],
+.vscode-high-contrast:not(.vscode-high-contrast-light) img[src$=\#gh-light-mode-only],
+.vscode-high-contrast-light img[src$=\#gh-dark-mode-only] {
+	display: none;
+}
+
+</style>
+            
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/markdown.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Microsoft/vscode/extensions/markdown-language-features/media/highlight.css">
+<style>
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
+                font-size: 14px;
+                line-height: 1.6;
+            }
+        </style>
+        <style>
+.task-list-item {
+    list-style-type: none;
+}
+
+.task-list-item-checkbox {
+    margin-left: -20px;
+    vertical-align: middle;
+    pointer-events: none;
+}
+</style>
+<style>
+:root {
+  --color-note: #0969da;
+  --color-tip: #1a7f37;
+  --color-warning: #9a6700;
+  --color-severe: #bc4c00;
+  --color-caution: #d1242f;
+  --color-important: #8250df;
+}
+
+</style>
+<style>
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-note: #2f81f7;
+    --color-tip: #3fb950;
+    --color-warning: #d29922;
+    --color-severe: #db6d28;
+    --color-caution: #f85149;
+    --color-important: #a371f7;
+  }
+}
+
+</style>
+<style>
+.markdown-alert {
+  padding: 0.5rem 1rem;
+  margin-bottom: 16px;
+  color: inherit;
+  border-left: .25em solid #888;
+}
+
+.markdown-alert>:first-child {
+  margin-top: 0
+}
+
+.markdown-alert>:last-child {
+  margin-bottom: 0
+}
+
+.markdown-alert .markdown-alert-title {
+  display: flex;
+  font-weight: 500;
+  align-items: center;
+  line-height: 1
+}
+
+.markdown-alert .markdown-alert-title .octicon {
+  margin-right: 0.5rem;
+  display: inline-block;
+  overflow: visible !important;
+  vertical-align: text-bottom;
+  fill: currentColor;
+}
+
+.markdown-alert.markdown-alert-note {
+  border-left-color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-note .markdown-alert-title {
+  color: var(--color-note);
+}
+
+.markdown-alert.markdown-alert-important {
+  border-left-color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-important .markdown-alert-title {
+  color: var(--color-important);
+}
+
+.markdown-alert.markdown-alert-warning {
+  border-left-color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-warning .markdown-alert-title {
+  color: var(--color-warning);
+}
+
+.markdown-alert.markdown-alert-tip {
+  border-left-color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-tip .markdown-alert-title {
+  color: var(--color-tip);
+}
+
+.markdown-alert.markdown-alert-caution {
+  border-left-color: var(--color-caution);
+}
+
+.markdown-alert.markdown-alert-caution .markdown-alert-title {
+  color: var(--color-caution);
+}
+
+</style>
+        
+        </head>
+        <body class="vscode-body vscode-light">
+            <h1 id="fluentgo--phân-tích-business-analyst-và-kế-hoạch-sản-phẩm">FluentGo — Phân tích Business Analyst và kế hoạch sản phẩm</h1>
+<h2 id="1-mục-tiêu-sản-phẩm">1. Mục tiêu sản phẩm</h2>
+<p>FluentGo là web app học tiếng Anh mobile-first cho người Việt từ A1 đến B2. Giá trị cốt lõi:</p>
+<ul>
+<li>Học theo lộ trình nhưng không bị giới hạn số bài trong ngày.</li>
+<li>Luyện đủ nghe, nói, đọc, viết, từ vựng và hội thoại tình huống.</li>
+<li>Nhận phản hồi AI tức thời bằng tiếng Việt.</li>
+<li>Giữ tiến độ theo tài khoản trên Google Sheets và tiếp tục học trên thiết bị khác.</li>
+<li>Duy trì động lực bằng XP, streak, mục tiêu ngày, mascot và sổ lỗi.</li>
+</ul>
+<h2 id="2-người-dùng-mục-tiêu">2. Người dùng mục tiêu</h2>
+<h3 id="persona-a--người-mới-bắt-đầu">Persona A — Người mới bắt đầu</h3>
+<ul>
+<li>Trình độ A1–A2, cần hướng dẫn tiếng Việt và bài ngắn.</li>
+<li>Muốn giao tiếp trong đời sống, du lịch và công việc cơ bản.</li>
+<li>Dễ bỏ cuộc nếu bài quá dài hoặc không biết mình sai ở đâu.</li>
+</ul>
+<h3 id="persona-b--người-học-độc-lập">Persona B — Người học độc lập</h3>
+<ul>
+<li>Trình độ B1–B2, muốn bài đa dạng và có chiều sâu.</li>
+<li>Cần luyện ý kiến, email, thuyết trình, phỏng vấn và đàm phán.</li>
+<li>Muốn học nhiều hơn kế hoạch ngày khi có thời gian.</li>
+</ul>
+<h3 id="persona-c--chủ-ứng-dụng-riêng">Persona C — Chủ ứng dụng riêng</h3>
+<ul>
+<li>Tự quản lý tài khoản, quota AI và dữ liệu Sheet.</li>
+<li>Ưu tiên triển khai đơn giản trên GitHub Pages.</li>
+<li>Chấp nhận key Gemini nằm ở frontend để giảm invocation Apps Script.</li>
+</ul>
+<h2 id="3-audit-chức-năng-trước-khi-cải-tiến">3. Audit chức năng trước khi cải tiến</h2>
+<table>
+<thead>
+<tr>
+<th>Khu vực</th>
+<th>Hiện trạng ban đầu</th>
+<th>Vấn đề chính</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Đăng ký/đăng nhập</td>
+<td>Có username/email, session 30 ngày</td>
+<td>Mỗi login tạo session mới; chưa có đổi/quên mật khẩu</td>
+</tr>
+<tr>
+<td>Trang hôm nay</td>
+<td>Có mục tiêu, XP, streak, task</td>
+<td>Task mang tính minh họa; chưa liên kết chặt với lesson ID</td>
+</tr>
+<tr>
+<td>Bản đồ</td>
+<td>Có A1–B2</td>
+<td>Trạng thái node hard-code; chỉ một lesson dùng cho mọi node</td>
+</tr>
+<tr>
+<td>Luyện nghe</td>
+<td>Một câu tĩnh</td>
+<td>Chọn xong bị khóa, không có Next</td>
+</tr>
+<tr>
+<td>Luyện đọc</td>
+<td>Một bài tĩnh</td>
+<td>Không có Next, không đổi theo level</td>
+</tr>
+<tr>
+<td>Luyện nói</td>
+<td>Một câu mẫu</td>
+<td>Không có danh sách câu theo level</td>
+</tr>
+<tr>
+<td>Luyện viết</td>
+<td>Một đề giới thiệu</td>
+<td>Không đổi chủ đề hoặc yêu cầu độ dài theo level</td>
+</tr>
+<tr>
+<td>Từ vựng</td>
+<td>Sáu flashcard A1</td>
+<td>Không có deck A2–B2</td>
+</tr>
+<tr>
+<td>Hội thoại AI</td>
+<td>Có scenario, voice, review</td>
+<td>Trước đây có lỗi JSON lồng; lịch sử chỉ nằm trong phiên hiện tại</td>
+</tr>
+<tr>
+<td>Sổ lỗi</td>
+<td>Hiển thị lỗi gần đây</td>
+<td>Nút ôn chỉ phát đáp án, chưa tạo phiên ôn thích nghi</td>
+</tr>
+<tr>
+<td>Hồ sơ</td>
+<td>Tên, level, goal, Sheets sync</td>
+<td>Thành tích và mục tiêu nghề nghiệp còn tĩnh</td>
+</tr>
+<tr>
+<td>AI</td>
+<td>Đi qua Apps Script</td>
+<td>Làm tăng invocation Apps Script cho mỗi lượt AI</td>
+</tr>
+</tbody>
+</table>
+<h2 id="4-benchmark-tính-năng">4. Benchmark tính năng</h2>
+<ul>
+<li>Duolingo Practice Hub gom luyện nghe, nói, lỗi sai, từ vựng, Stories và Radio; bài ngắn, XP và node mở dần giúp tạo thói quen. Nguồn: <a href="https://blog.duolingo.com/guide-to-duolingo-practice-hub/">Duolingo Practice Hub</a> và <a href="https://blog.duolingo.com/ways-to-practice-in-duolingo/">Duolingo ways to practice</a>.</li>
+<li>ELSA tập trung AI Conversation Coach, Pronunciation Coach, role-play tự tạo, phản hồi chi tiết và theo dõi tiến bộ. Nguồn: <a href="https://blog.elsaspeak.com/en/discover-the-new-elsa-speak-experience/">ELSA new experience</a> và <a href="https://us.elsaspeak.com/infus/">ELSA features</a>.</li>
+<li>Các mini-unit hiện đại giới thiệu ít kiến thức mới rồi áp dụng ngay bằng nghe/nói/truyện/hội thoại, thay vì một unit dài. Nguồn: <a href="https://blog.duolingo.com/intermediate-mini-units/">Duolingo mini-units</a>.</li>
+</ul>
+<h2 id="5-yêu-cầu-nghiệp-vụ-ưu-tiên">5. Yêu cầu nghiệp vụ ưu tiên</h2>
+<h3 id="p0--đã-triển-khai-trong-phiên-bản-này">P0 — Đã triển khai trong phiên bản này</h3>
+<ol>
+<li>Gemini gọi trực tiếp từ browser, không tạo action Gemini trên Apps Script.</li>
+<li>Listening và Reading có nhiều bài theo level, giải thích đáp án và nút Next.</li>
+<li>Speaking và Writing có nhiều đề theo level; AI chấm xong mở đề tiếp theo.</li>
+<li>Vocabulary có deck riêng A1, A2, B1 và B2.</li>
+<li>Roadmap dùng lesson ID thật, hoàn thành bài mở ngay bài tiếp theo trong cùng ngày.</li>
+<li>Mỗi node roadmap tạo lesson dựa trên nội dung level/node thay vì dùng một lesson cố định.</li>
+<li>Sai nghe/đọc và lỗi viết được đưa vào sổ lỗi; <code>practiceStats</code> được lưu trong progress.</li>
+<li>Dữ liệu cũ <code>completedLessons: [1,2,...]</code> được migrate sang ID <code>A1-0</code>, <code>A1-1</code>, ...</li>
+</ol>
+<h3 id="p1--đề-xuất-phiên-bản-kế-tiếp">P1 — Đề xuất phiên bản kế tiếp</h3>
+<ol>
+<li>Placement test 10–15 câu để đề xuất level đầu vào.</li>
+<li>Spaced repetition thật: mỗi từ có <code>ease</code>, <code>interval</code>, <code>nextReviewAt</code> và hàng đợi đến hạn.</li>
+<li>Phiên “Ôn lỗi thích nghi”: tạo lại câu hỏi từ lỗi gần đây, không chỉ hiển thị đáp án.</li>
+<li>Báo cáo tiến bộ theo kỹ năng: accuracy nghe/đọc, điểm nói/viết trung bình, số từ đến hạn.</li>
+<li>Streak chuẩn theo ngày hoạt động thực tế, có streak freeze và timezone nhất quán.</li>
+<li>Onboarding chọn mục tiêu: du lịch, công việc, giao tiếp, IELTS; ưu tiên nội dung tương ứng.</li>
+<li>Download/export tiến độ JSON/CSV và chức năng xóa tài khoản/dữ liệu.</li>
+</ol>
+<h3 id="p2--mở-rộng-nổi-bật">P2 — Mở rộng nổi bật</h3>
+<ol>
+<li>Story/mini podcast kèm transcript bật tắt và câu hỏi xen kẽ.</li>
+<li>Word matching/timed challenge và daily quest để tăng tính trò chơi.</li>
+<li>AI tạo lesson cá nhân từ lỗi sai và mục tiêu nghề nghiệp.</li>
+<li>Conversation report cuối phiên: fluency, grammar, vocabulary range và “câu nên luyện lại”.</li>
+<li>Accent/voice selector US–UK, tốc độ đọc và chế độ shadowing.</li>
+<li>Leaderboard nhóm riêng hoặc thử thách với bạn bè nếu sản phẩm mở rộng nhiều người.</li>
+</ol>
+<h2 id="6-luồng-nghiệp-vụ-sau-cải-tiến">6. Luồng nghiệp vụ sau cải tiến</h2>
+<h3 id="lộ-trình">Lộ trình</h3>
+<ol>
+<li>User chọn level.</li>
+<li>Hệ thống lấy node đầu tiên chưa hoàn thành làm <code>current</code>.</li>
+<li>Node tương lai bị khóa; node hoàn thành có thể mở lại để ôn.</li>
+<li>Khi nhận thưởng, lesson ID được thêm vào <code>completedLessons</code>.</li>
+<li>Node kế tiếp mở ngay, không kiểm tra giới hạn theo ngày.</li>
+<li>XP, phút học và progress được lưu local rồi debounce lên Google Sheets.</li>
+</ol>
+<h3 id="luyện-ngheđọc">Luyện nghe/đọc</h3>
+<ol>
+<li>Hệ thống lấy bộ bài theo level hiện tại.</li>
+<li>User chọn một đáp án; danh sách khóa để tránh chấm hai lần.</li>
+<li>Hiển thị đúng/sai, đáp án đúng và giải thích.</li>
+<li>Ghi <code>practiceStats</code>, lỗi sai và XP.</li>
+<li>Hiện nút Next; hết deck thì quay vòng và báo hoàn thành một vòng.</li>
+</ol>
+<h3 id="luyện-nóiviết">Luyện nói/viết</h3>
+<ol>
+<li>Hệ thống lấy target/prompt theo level.</li>
+<li>User ghi âm hoặc viết nội dung.</li>
+<li>Browser gọi Gemini trực tiếp và nhận JSON review.</li>
+<li>UI hiển thị điểm, sửa lỗi và gợi ý.</li>
+<li>Ghi XP, số bài và lỗi viết; mở bài tiếp theo.</li>
+</ol>
+<h2 id="7-kiến-trúc-và-rủi-ro">7. Kiến trúc và rủi ro</h2>
+<h3 id="kiến-trúc-hiện-tại">Kiến trúc hiện tại</h3>
+<ul>
+<li>GitHub Pages: HTML/CSS/jQuery, lesson data, Gemini REST request.</li>
+<li>Apps Script: đăng ký, đăng nhập, session, profile và sync progress.</li>
+<li>Google Sheets: Config, Users, Sessions và Progress.</li>
+<li>LocalStorage: session token, state theo user và bộ đếm AI theo ngày trên thiết bị.</li>
+</ul>
+<h3 id="rủi-ro-key-gemini-ở-frontend">Rủi ro key Gemini ở frontend</h3>
+<p>Repository private không làm key trong website trở thành bí mật: trình duyệt phải tải key và user có thể xem trong DevTools/network. Google cũng khuyến cáo không hard-code API key trong production client. Nguồn: <a href="https://ai.google.dev/gemini-api/docs/generate-content/api-key">Google — Using Gemini API keys</a>.</p>
+<p>Biện pháp giảm rủi ro trong phạm vi yêu cầu hiện tại:</p>
+<ul>
+<li>Dùng một key riêng chỉ cho FluentGo.</li>
+<li>Restrict key chỉ được dùng với Gemini API nếu Google Cloud/AI Studio hỗ trợ cấu hình đó.</li>
+<li>Đặt budget alert và theo dõi Usage.</li>
+<li>Giữ <code>dailyAiLimit</code>, cooldown và một request đồng thời ở frontend để ngăn thao tác nhầm; các giới hạn này không chống được người đã lấy key.</li>
+<li>Có quy trình rotate key khi nghi ngờ bị lộ.</li>
+</ul>
+<h2 id="8-acceptance-criteria-p0">8. Acceptance criteria P0</h2>
+<ul>
+<li>Không còn <code>bridgeCall('gemini', ...)</code> trong frontend.</li>
+<li>Apps Script từ chối action <code>gemini</code> và không còn code <code>UrlFetchApp.fetch</code> tới Gemini.</li>
+<li>Mỗi level có tối thiểu ba bài nghe, ba bài đọc, ba câu nói, ba đề viết và sáu từ.</li>
+<li>Chọn đáp án nghe/đọc luôn xuất hiện nút Next.</li>
+<li>Chuyển level làm mới đúng bộ bài.</li>
+<li>Hoàn thành roadmap node mở node tiếp theo ngay trong cùng ngày.</li>
+<li>Reload/đăng nhập lại vẫn khôi phục <code>completedLessons</code>, XP, mistakes và <code>practiceStats</code>.</li>
+<li>Frontend và Apps Script qua kiểm tra cú pháp.</li>
+</ul>
+
+            
+            
+        </body>
+        </html>
