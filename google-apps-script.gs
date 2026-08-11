@@ -218,6 +218,7 @@ function loginUser_(payload,config) {
   if (!found || found.user.status!=='active') throw new Error('Email hoặc mật khẩu không chính xác.');
   const actual=hashPassword_(password,found.user.passwordSalt,config.APP_SCRIPT_KEY);
   if (!constantTimeEqual_(actual,found.user.passwordHash)) throw new Error('Email hoặc mật khẩu không chính xác.');
+  clearAuthLimit_('login_'+identifier);
   const now=new Date().toISOString();
   found.sheet.getRange(found.rowIndex,7).setValue(now); found.user.lastLogin=now;
   const session=createSession_(found.user.userId,config.APP_SCRIPT_KEY);
@@ -309,6 +310,11 @@ function enforceAuthLimit_(identity,limit) {
   const count=Number(cache.get(key)||0);
   if (count>=limit) throw new Error('Quá nhiều lần thử. Vui lòng chờ 10 phút.');
   cache.put(key,String(count+1),600);
+}
+
+function clearAuthLimit_(identity) {
+  const key='auth_'+Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(identity),Utilities.Charset.UTF_8)).slice(0,40);
+  CacheService.getScriptCache().remove(key);
 }
 
 function enforceActionRate_(identity,action,limit) {

@@ -950,7 +950,7 @@
     if (!bridgeReady || !bridgeMessageWindow) return Promise.reject(new Error('Apps Script chưa kết nối.'));
     return new Promise((resolve,reject) => {
       const id='req_'+Date.now()+'_'+(++bridgeSequence);
-      const timeout=setTimeout(() => { bridgeRequests.delete(id); reject(new Error('Apps Script phản hồi quá thời gian.')); },60000);
+      const timeout=setTimeout(() => { bridgeRequests.delete(id); reject(new Error('Apps Script phản hồi quá thời gian.')); },90000);
       bridgeRequests.set(id,{resolve,reject,timeout});
       bridgeMessageWindow.postMessage({source:'fluentgo-parent',type:'request',id,action,payload,sessionToken:currentSessionToken},'*');
     });
@@ -960,7 +960,8 @@
     if (!bridgeReady || !serverStatus.gemini) throw new Error('Gemini chưa sẵn sàng trên Apps Script. Hãy kiểm tra FluentGo Config.');
     if (!authUser || !currentSessionToken) throw new Error('Vui lòng đăng nhập để sử dụng Gemini AI.');
     if (aiRequestInFlight) throw new Error('Mochi đang xử lý một yêu cầu khác. Vui lòng chờ một chút.');
-    if (Date.now()-lastAiRequestAt<1800) throw new Error('Bạn thao tác hơi nhanh. Hãy chờ 2 giây rồi thử lại.');
+    const cooldownRemaining=1800-(Date.now()-lastAiRequestAt);
+    if (cooldownRemaining>0) await new Promise(resolve=>setTimeout(resolve,cooldownRemaining));
     aiRequestInFlight=true;
     try {
       const curriculumContext='Learning goal: '+currentGoal().name+'. Current roadmap topic: '+(CURRICULUM?.getRoadmap(currentGoalId(),state.level)?.[Number(state.roadmapUnit)||0]?.title||'general')+'. ';
@@ -1384,13 +1385,24 @@
       $button.prop('disabled',true).text('✦ AI đang soạn...');
       try {
         const data=await askGemini('exercise','Create a fresh English practice set for this learner.','Topic: '+selectedTopic+'. Requested exercise type: '+selectedType+'. Keep all questions and answer options in English, except a translation prompt may start in Vietnamese.');
-        const allowed=new Set(CURRICULUM.types.filter(type=>!['speaking','writing'].includes(type[0])).map(type=>type[0])),raw=Array.isArray(data.exercises)?data.exercises:[];
+        const allowed=new Set(CURRICULUM.types.filter(type=>!['speaking','writing'].includes(type[0])).map(type=>type[0])),rawCandidates=[data.exercises,data.questions,data.items,data.tasks],raw=rawCandidates.find(Array.isArray)||[];
         const generated=raw.slice(0,8).map((item,index)=>{
-          const type=allowed.has(item.type)?item.type:'grammar',options=Array.isArray(item.options)?item.options.map(String).filter(Boolean).slice(0,4):[],answer=String(item.answer||'');
-          if (options.length<3||!options.includes(answer)||!String(item.question||'').trim()) return null;
-          return {id:'ai-'+Date.now()+'-'+index,goalId:currentGoalId(),level:state.level,topic:selectedTopic,topicEn:selectedTopic,type,typeLabel:CURRICULUM.types.find(value=>value[0]===type)?.[1]||'AI practice',question:String(item.question),options,answer,explanation:String(item.explanation||'Review the answer in context.'),audio:item.audio?String(item.audio):'',passage:item.passage?String(item.passage):''};
+          const type=allowed.has(item.type)?item.type:'grammar',rawOptions=Array.isArray(item.options)?item.options:Array.isArray(item.choices)?item.choices:Array.isArray(item.answers)?item.answers:[],optionText=value=>String(value&&typeof value==='object'?(value.text||value.label||value.value||''):value||'').trim();
+          const options=rawOptions.map(optionText).filter(Boolean).slice(0,4); let answer=optionText(item.answer??item.correctAnswer??item.correct_option??item.correct);
+          const numeric=Number(item.correctIndex??item.answerIndex),letter=answer.match(/^[A-D](?:[.)])?$/i);
+          if (Number.isInteger(numeric)&&options[numeric]) answer=options[numeric]; else if (letter&&options[letter[0].toUpperCase().charCodeAt(0)-65]) answer=options[letter[0].toUpperCase().charCodeAt(0)-65];
+          const matched=options.find(option=>option.toLowerCase()===answer.toLowerCase()); if (matched) answer=matched;
+          if (answer&&!options.includes(answer)) { if (options.length<4) options.push(answer); else options[options.length-1]=answer; }
+          ['A different response','Not enough information','None of these choices'].forEach(value=>{ if (options.length<3&&!options.includes(value)&&value!==answer) options.push(value); });
+          const question=optionText(item.question||item.prompt||item.text);
+          if (options.length<3||!answer||!options.includes(answer)||!question) return null;
+          return {id:'ai-'+Date.now()+'-'+index,goalId:currentGoalId(),level:state.level,topic:selectedTopic,topicEn:selectedTopic,type,typeLabel:CURRICULUM.types.find(value=>value[0]===type)?.[1]||'AI practice',question,options,answer,explanation:optionText(item.explanation||item.feedback||'Review the answer in context.'),audio:optionText(item.audio||item.audioScript),passage:optionText(item.passage||item.context)};
         }).filter(Boolean);
-        if (generated.length<3) throw new Error('AI chưa tạo đủ câu hợp lệ. Hãy thử lại.');
+        if (generated.length<6) {
+          const fallback=CURRICULUM.getExercises(currentGoalId(),state.level,selectedType,selectedTopic).filter(item=>allowed.has(item.type)&&Array.isArray(item.options)&&item.options.includes(item.answer)),used=new Set(generated.map(item=>item.question+'|'+item.answer));
+          seededIndexes(fallback.length,stableHash(currentGoalId()+'|'+state.level+'|'+selectedTopic+'|'+Date.now())).forEach(sourceIndex=>{ const item=fallback[sourceIndex],signature=item.question+'|'+item.answer; if (generated.length>=6||used.has(signature)) return; used.add(signature); generated.push(Object.assign({},item,{id:'ai-repaired-'+Date.now()+'-'+generated.length,question:'Fresh scenario: '+item.question})); });
+        }
+        if (generated.length<3) throw new Error('AI chưa tạo đủ câu hợp lệ và kho dự phòng không phù hợp bộ lọc hiện tại.');
         practiceSession.aiChallengeDeck=generated; practiceSession.challengeQueue=null; renderChallenge(true); toast('Đã tạo '+generated.length+' câu mới theo đúng mục tiêu và trình độ.','success');
       } catch(error) { toast(error.message||'Chưa thể tạo bộ bài AI.','error'); }
       finally { $button.prop('disabled',false).text('✦ AI tạo bộ mới'); }
@@ -1428,7 +1440,11 @@
         const data=await askGemini('speaking',examTranscript,'Target sentence: '+item.target+'. The learner must say every word in the complete target sentence. Grade pronunciation, content accuracy and fluency strictly.',examAudio);
         const transcriptCoverage=examTranscript?spokenContentCoverage(item.target,examTranscript):null,aiCoverage=Number(data.contentScore??data.accuracyScore??data.accuracy),coverage=Number.isFinite(aiCoverage)?Math.round(Math.max(0,Math.min(100,aiCoverage))):(transcriptCoverage===null?0:transcriptCoverage),raw=Math.max(0,Math.min(100,Number(data.score)||0)),pronunciation=Math.max(0,Math.min(100,Number(data.pronunciationScore)||raw)),score=Math.min(raw,pronunciation,coverage<SPEAKING_MIN_COVERAGE?79:100);
         recordExamAnswer(score,examTranscript,`<strong>Điểm nói: ${Math.round(score)}/100</strong><span>Nội dung ${coverage}% · Phát âm ${Math.round(pronunciation)}/100 · Trôi chảy ${Math.round(Number(data.fluencyScore)||raw)}/100</span><small>${escapeHtml(aiText(data.improvements,'Hãy đọc đủ câu, rõ âm cuối và giữ nhịp tự nhiên.'))}</small>`);
-      } catch(error) { toast(error.message||'Gemini chưa thể chấm phần nói.','error'); }
+      } catch(error) {
+        const coverage=examTranscript?spokenContentCoverage(item.target,examTranscript):0,score=Math.min(79,Math.round(coverage));
+        recordExamAnswer(score,examTranscript,`<strong>Điểm nói dự phòng: ${score}/100</strong><span>Nội dung ${coverage}% · AI tạm gián đoạn nên chưa xác minh được phát âm.</span><small>Bạn vẫn có thể làm tiếp đề; hãy luyện lại câu này khi Gemini kết nối ổn định.</small>`);
+        toast(error.message||'Gemini tạm gián đoạn; đã dùng điểm nội dung dự phòng.','error');
+      }
       finally { $button.prop('disabled',false).text('✦ Chấm phần nói'); }
     });
     $('#practice-exam').on('input','#examWritingInput',function(){ $('#examWritingCount').text(this.value.length); });
@@ -1437,7 +1453,11 @@
       if (wordCount<Number(item.minWords||20)) return toast('Hãy viết ít nhất '+(item.minWords||20)+' từ trước khi nộp.','error');
       const $button=$(this).prop('disabled',true).text('✦ Đang chấm...');
       try { const data=await askGemini('writing',text,'Timed exam writing task: '+(item.instruction||item.question)+'. Grade task completion, grammar, vocabulary and naturalness realistically.'); const score=Math.max(0,Math.min(100,Number(data.score)||0)); recordExamAnswer(score,text,`<strong>Điểm viết: ${Math.round(score)}/100</strong><span>${escapeHtml(aiText(data.explanation||data.improvements,'Bài viết đã được chấm theo độ đúng, đủ ý và tự nhiên.'))}</span>${data.corrected?`<small>Gợi ý: ${escapeHtml(data.corrected)}</small>`:''}`); }
-      catch(error) { toast(error.message||'Gemini chưa thể chấm phần viết.','error'); }
+      catch(error) {
+        const target=Math.max(1,Number(item.minWords||20)),score=Math.min(75,Math.round(45+Math.min(30,wordCount/target*30)));
+        recordExamAnswer(score,text,`<strong>Điểm viết dự phòng: ${score}/100</strong><span>Đã kiểm tra độ dài và mức hoàn thành cơ bản. AI tạm gián đoạn nên ngữ pháp, từ vựng chưa được chấm sâu.</span>`);
+        toast(error.message||'Gemini tạm gián đoạn; đã dùng điểm viết dự phòng.','error');
+      }
       finally { $button.prop('disabled',false).text('✦ Nộp phần viết'); }
     });
     $('#nextExamQuestion').on('click',function(){ if (!examSession.active||!examSession.answered) return; if (examSession.index>=examSession.exam.items.length-1) finishExam(false); else { examSession.index++; renderExamQuestion(); } });
