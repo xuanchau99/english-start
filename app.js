@@ -16,7 +16,7 @@
     xp: 1240, streak: 7, longestStreak: 12, minutesWeek: 78,
     lastActive: todayKey(), lastCompletedDay: '', completedToday: ['warmup'],
     completedLessons: ['A1-0','A1-1','A1-2','A1-3','A1-4'], lessonProgress: { daily: 35 },
-    wordsLearned: 24, vocabularyReview:{}, exerciseMastery:{}, practiceStats:{listening:{done:0,correct:0},reading:{done:0,correct:0},speaking:{done:0},writing:{done:0}}, mistakes: [
+    wordsLearned: 24, vocabularyReview:{}, exerciseMastery:{}, practiceOffsets:{}, examResults:{}, practiceStats:{listening:{done:0,correct:0},reading:{done:0,correct:0},speaking:{done:0},writing:{done:0}}, mistakes: [
       { type: 'Ngữ pháp', wrong: 'I am live in Hanoi.', right: 'I live in Hanoi.', note: 'Không dùng “am” trước động từ thường.' },
       { type: 'Từ vựng', wrong: 'Nice to see you.', right: 'Nice to meet you.', note: 'Dùng “meet” khi gặp lần đầu.' },
       { type: 'Phát âm', wrong: '/nɪs/', right: '/naɪs/', note: 'Âm /aɪ/ kéo nhẹ trong “nice”.' }
@@ -66,6 +66,8 @@
   let chatRecognitionRestartTimer = null;
   let chatDictationBase = '';
   const practiceSession = {level:'',goal:'',topic:'all',listening:0,reading:0,speaking:0,writing:0,vocabulary:0,challenge:0,listeningQueue:null,readingQueue:null,vocabularyQueue:null,challengeQueue:null,aiChallengeDeck:null,vocabularyQuiz:null,listeningResults:[],readingResults:[],speakingResults:[],writingResults:[],vocabularyResults:[],challengeResults:[]};
+  const examSession = {active:false,exam:null,index:0,scores:[],answers:[],startedAt:0,secondsLeft:0,timer:null,answered:false};
+  let examRecognition=null,examRecognitionBase='',examRecognitionRestartTimer=null,examRecording=false,examRecorder=null,examStream=null,examChunks=[],examAudio=null,examTranscript='',examAudioReady=null;
   const conversation = { active:false,scenario:'',aiRole:'',userRole:'',first:'user',history:[],turns:0,messageSequence:0 };
 
   const roadmapData = {
@@ -198,16 +200,66 @@
     const today = (new Date().getDay() + 6) % 7;
     $('#streakCalendar').html(days.map((day,i) => `<div class="streak-day ${i <= today ? 'done' : ''} ${i === today ? 'today' : ''}"><span>${day}</span><i>${i <= today ? '🔥' : '·'}</i></div>`).join(''));
   }
+
+  const ROADMAP_MAP_POINTS = [
+    {x:24,y:12},{x:54,y:25},{x:74,y:41},{x:47,y:57},{x:25,y:73},{x:55,y:88}
+  ];
+  const ROADMAP_MAP_THEMES = {
+    general:{name:'Phố Kết Nối',className:'town',landmarks:[['🏡','Khu phố'],['☕','Quán trò chuyện'],['🌳','Công viên']]},
+    developer:{name:'Thành phố Công Nghệ',className:'tech',landmarks:[['💻','Dev station'],['🛰️','API hub'],['🚀','Deploy port']]},
+    workplace:{name:'Khu Công Sở',className:'office',landmarks:[['🏢','Văn phòng'],['📊','Phòng họp'],['🤝','Team hub']]},
+    travel:{name:'Hành trình Thế giới',className:'travel',landmarks:[['🗼','Điểm đến'],['🏝️','Trạm khám phá'],['✈️','Sân bay']]},
+    study:{name:'Học viện Tri thức',className:'academy',landmarks:[['🏫','Giảng đường'],['📚','Thư viện'],['🎓','Đích tốt nghiệp']]},
+    service:{name:'Phố Dịch vụ',className:'market',landmarks:[['🏪','Cửa hàng'],['🛎️','Quầy hỗ trợ'],['⭐','Khách hài lòng']]}
+  };
+
+  function roadmapLessonIcon(type) {
+    return {GUIDEBOOK:'📖',DIALOGUE:'🎧',STORY:'📚',PRACTICE:'🧩',PRODUCTION:'🎙️',CHECKPOINT:'🏆'}[String(type||'').toUpperCase()]||'⭐';
+  }
+
+  function roadmapWorldHtml(items,completed,firstPending,level,unitIndex,progress,lockFuture) {
+    const theme=ROADMAP_MAP_THEMES[currentGoalId()]||ROADMAP_MAP_THEMES.general;
+    const points=items.map((_,index)=>ROADMAP_MAP_POINTS[index]||{x:index%2?68:32,y:12+index*14});
+    const routePath='M 24 12 C 33 16 44 18 54 25 S 79 33 74 41 S 58 51 47 57 S 24 64 25 73 S 43 82 55 88';
+    const landmarks=theme.landmarks.map((landmark,index)=>`<div class="map-landmark landmark-${index+1}" aria-hidden="true"><span>${landmark[0]}</span><small>${escapeHtml(landmark[1])}</small></div>`).join('');
+    let currentPoint=points[Math.max(0,firstPending)]||points[0]||{x:24,y:12};
+    const guideX=currentPoint.x<50?Math.max(9,currentPoint.x-12):Math.min(91,currentPoint.x+12);
+    const nodes=items.map((item,index)=>{
+      const id=item.id||level+'-'+index,isDone=completed.has(id),status=isDone?'done':index===firstPending?'current':lockFuture?'locked':'available';
+      const point=points[index],side=point.x>=52?'card-left':'card-right',icon=isDone?'✓':status==='current'?'▶':status==='locked'?'🔒':roadmapLessonIcon(item.type||item[1]);
+      const title=item.title||item[0],type=item.type||item[1],minutes=item.minutes||'';
+      const statusText=isDone?'ĐÃ XONG':status==='current'?'ĐANG HỌC':status==='locked'?'CHƯA MỞ':'CÓ THỂ HỌC';
+      return `<button type="button" class="road-node map-node ${side} ${status}" style="--x:${point.x}%;--y:${point.y}%;--delay:${index*.07}s" data-index="${index}" data-level="${level}" data-unit="${unitIndex}" ${status==='locked'?'disabled aria-disabled="true"':''} aria-label="${escapeHtml(statusText+': '+title)}"><span class="node-circle"><i>${icon}</i></span><span class="node-info"><em>${statusText}</em><small>${escapeHtml(type)}${minutes?' · '+minutes+' PHÚT':''}</small><strong>${escapeHtml(title)}</strong></span></button>`;
+    }).join('');
+    $('.roadmap-card').attr('data-map-theme',theme.className);
+    return `<div class="roadmap-scene" aria-label="Bản đồ ${escapeHtml(theme.name)}">
+      <div class="map-horizon" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div class="map-cloud cloud-one" aria-hidden="true">☁</div><div class="map-cloud cloud-two" aria-hidden="true">☁</div>
+      <div class="map-world-title"><span>KHÁM PHÁ</span><strong>${escapeHtml(theme.name)}</strong></div>
+      ${landmarks}
+      <svg class="roadmap-route" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+        <path class="route-shadow" d="${routePath}" pathLength="100"></path>
+        <path class="route-base" d="${routePath}" pathLength="100"></path>
+        <path class="route-progress" d="${routePath}" pathLength="100" style="stroke-dasharray:${progress} 100"></path>
+      </svg>
+      <div class="map-gate map-start" aria-hidden="true"><span>🚩</span><small>BẮT ĐẦU</small></div>
+      <div class="map-gate map-finish" aria-hidden="true"><span>🏰</span><small>CHINH PHỤC</small></div>
+      ${nodes}
+      <div class="map-guide" style="--guide-x:${guideX}%;--guide-y:${Math.max(7,currentPoint.y-1)}%" aria-hidden="true"><img src="assets/mochi.png" alt=""><span>Bạn đang ở đây!</span></div>
+      <div class="map-legend"><span><i class="legend-done"></i>Đã xong</span><span><i class="legend-current"></i>Đang học</span><span><i class="legend-open"></i>Có thể học</span></div>
+    </div>`;
+  }
+
   function renderRoadmap(level) {
     level=level||state.level;
     if (!CURRICULUM) {
-      const items=roadmapData[level]||roadmapData.A1,completed=new Set(state.completedLessons||[]),nextIndex=Math.max(0,items.findIndex((_,index)=>!completed.has(level+'-'+index)));
+      const items=roadmapData[level]||roadmapData.A1,completed=new Set(state.completedLessons||[]),pendingIndex=items.findIndex((_,index)=>!completed.has(level+'-'+index)),nextIndex=pendingIndex<0?items.length-1:pendingIndex;
       const doneCount=items.filter((_,index)=>completed.has(level+'-'+index)).length,progress=Math.round(doneCount/items.length*100);
       $('#roadmapRing').css('--progress',progress).find('span').text(progress+'%'); $('#roadmapCount').text(doneCount+'/'+items.length+' bài');
-      return $('#roadmap').html(items.map((item,i)=>`<div class="road-node ${i%2?'right':'left'} ${completed.has(level+'-'+i)?'done':i===nextIndex?'current':'locked'}" data-index="${i}" data-level="${level}"><div class="node-circle">${completed.has(level+'-'+i)?'✓':i===nextIndex?'▶':'🔒'}</div><div class="node-info"><small>${item[1]}</small><strong>${item[0]}</strong></div></div>`).join(''));
+      return $('#roadmap').html(roadmapWorldHtml(items,completed,nextIndex,level,0,progress,true));
     }
     const units=CURRICULUM.getRoadmap(currentGoalId(),level),unitIndex=Math.min(11,Math.max(0,Number(state.roadmapUnit)||0)),unit=units[unitIndex],items=unit.lessons,completed=new Set(state.completedLessons||[]);
-    const doneCount=items.filter(item=>completed.has(item.id)).length,progress=Math.round(doneCount/items.length*100),firstPending=Math.max(0,items.findIndex(item=>!completed.has(item.id)));
+    const doneCount=items.filter(item=>completed.has(item.id)).length,progress=Math.round(doneCount/items.length*100),pendingIndex=items.findIndex(item=>!completed.has(item.id)),firstPending=pendingIndex<0?items.length-1:pendingIndex;
     $('#roadmapGoalSelect').html(goalOptions(currentGoalId())).val(currentGoalId());
     $('#roadmapUnitSelect').html(units.map((value,index)=>`<option value="${index}">Chặng ${index+1} · ${escapeHtml(value.title)}</option>`).join('')).val(String(unitIndex));
     $('#previousRoadmapUnit').prop('disabled',unitIndex===0); $('#nextRoadmapUnit,#openNextUnit').prop('disabled',unitIndex===units.length-1);
@@ -215,10 +267,7 @@
     $('#guidebookTitle').text(unit.englishTitle+' · '+level); $('#guidebookOutcomes').html(unit.guidebook.outcomes.map(outcome=>`<span>✓ ${escapeHtml(outcome)}</span>`).join('')); $('#guidebookPhrases').html(`<small>KEY PHRASES</small>${unit.guidebook.keyPhrases.map(phrase=>`<button class="guidebook-sound" data-phrase="${escapeHtml(phrase)}">♫ ${escapeHtml(phrase)}</button>`).join('')}<em>Grammar: ${escapeHtml(unit.guidebook.grammar)}</em>`);
     $('.unit-header .unit-number').text(String(unitIndex+1).padStart(2,'0')); $('#roadmapRing').css('--progress',progress).find('span').text(progress+'%'); $('#roadmapCount').text(doneCount+'/'+items.length+' bài');
     const nextUnit=units[Math.min(unitIndex+1,units.length-1)]; $('#nextUnitTitle').text(unitIndex<units.length-1?'Chặng tiếp: '+nextUnit.title:'Bạn đã mở toàn bộ lộ trình'); $('#nextUnitDescription').text(unitIndex<units.length-1?nextUnit.description:'Hãy hoàn thiện các bài còn thiếu hoặc đổi mục tiêu để khám phá lộ trình mới.');
-    $('#roadmap').html(items.map((item,i)=>{
-      const status=completed.has(item.id)?'done':i===firstPending?'current':'available',icon=status==='done'?'✓':status==='current'?'▶':String(i+1);
-      return `<div class="road-node ${i%2?'right':'left'} ${status}" data-index="${i}" data-level="${level}" data-unit="${unitIndex}"><div class="node-circle">${icon}</div><div class="node-info"><small>${escapeHtml(item.type)} · ${item.minutes} PHÚT</small><strong>${escapeHtml(item.title)}</strong></div></div>`;
-    }).join(''));
+    $('#roadmap').html(roadmapWorldHtml(items,completed,firstPending,level,unitIndex,progress,false));
   }
   function renderMistakes() {
     $('#mistakeList').html(state.mistakes.map((m,i) => `<div class="mistake-item"><span class="mistake-icon">${m.type === 'Phát âm' ? '♫' : m.type === 'Từ vựng' ? 'Aa' : '✎'}</span><div class="mistake-copy"><small>${escapeHtml(m.type)} · ${escapeHtml(m.note)}</small><p><del>${escapeHtml(m.wrong)}</del><ins>→ ${escapeHtml(m.right)}</ins></p></div><button class="review-mistake" data-index="${i}">Ôn lại</button></div>`).join(''));
@@ -299,6 +348,10 @@
   function routeTo(route) {
     const valid = ['home','learn','practice','review','profile'];
     route = valid.includes(route) ? route : 'home';
+    if (route!=='practice'&&examSession.active) {
+      if (!confirm('Đề thi đang chạy. Bạn có chắc muốn thoát? Kết quả chưa nộp sẽ không được lưu.')) return;
+      abortExam();
+    }
     if (route!=='practice') stopSpeakingRecording(true);
     $('.view').removeClass('active'); $('#view-' + route).addClass('active');
     $('[data-route]').removeClass('active').filter(`[data-route="${route}"]`).addClass('active');
@@ -307,6 +360,10 @@
   }
 
   function switchPractice(type) {
+    if (examSession.active&&type!=='exam') {
+      if (!confirm('Đề thi đang chạy. Bạn có chắc muốn thoát? Kết quả chưa nộp sẽ không được lưu.')) return;
+      abortExam();
+    }
     if (type!=='speaking') stopSpeakingRecording(true);
     routeTo('practice');
     $('.practice-tab').removeClass('active').filter(`[data-practice="${type}"]`).addClass('active');
@@ -315,19 +372,75 @@
     setTimeout(() => $('#view-practice')[0].scrollIntoView({ behavior:'smooth', block:'start' }), 50);
   }
 
+  function stableHash(value) {
+    let hash=2166136261;
+    for (const char of String(value||'')) { hash^=char.charCodeAt(0); hash=Math.imul(hash,16777619); }
+    return hash>>>0;
+  }
+
+  function seededIndexes(length,seed) {
+    const values=Array.from({length},(_,index)=>index); let value=(Number(seed)||1)>>>0;
+    const random=()=>{ value=(Math.imul(value,1664525)+1013904223)>>>0; return value/4294967296; };
+    for (let index=values.length-1;index>0;index--) { const swap=Math.floor(random()*(index+1)); [values[index],values[swap]]=[values[swap],values[index]]; }
+    return values;
+  }
+
+  function practiceQueueKey(type) {
+    const topic=type==='vocabulary'?(state.vocabularyTopic||'all'):type==='challenge'?(state.challengeTopic||'all'):(state.practiceTopic||'all');
+    return [currentGoalId(),state.level,type,topic].join(':');
+  }
+
+  function practiceSessionLimit(type,length) {
+    return Math.min(length,{listening:8,reading:8,speaking:6,writing:6,vocabulary:12,challenge:20}[type]||10);
+  }
+
+  function buildPracticeQueue(type,source,retryEntries) {
+    if (!source.length) return [];
+    if (Array.isArray(retryEntries)&&retryEntries.length) return retryEntries.map(entry=>typeof entry==='object'?entry:{itemIndex:Number(entry)||0,variantCycle:0});
+    state.practiceOffsets=state.practiceOffsets||{};
+    const key=practiceQueueKey(type),offset=Math.max(0,Number(state.practiceOffsets[key])||0),limit=practiceSessionLimit(type,source.length),queue=[];
+    for (let step=0;step<limit;step++) {
+      const absolute=offset+step,cycle=Math.floor(absolute/source.length),position=absolute%source.length,order=seededIndexes(source.length,stableHash(key+'|'+cycle));
+      queue.push({itemIndex:order[position],variantCycle:cycle});
+    }
+    state.practiceOffsets[key]=offset+limit;
+    return queue;
+  }
+
+  function variantDialogue(text,cycle,index) {
+    if (!cycle) return String(text||'');
+    const pairs=[['Noah','Olivia'],['Ethan','Ava'],['Lucas','Sophia'],['Daniel','Emma'],['James','Mia'],['Henry','Chloe']],pair=pairs[(cycle+index)%pairs.length];
+    const lines=String(text||'').split(/\n+/),renamed=lines.map(line=>line.replace(/^\s*Alex\s*:/i,pair[0]+':').replace(/^\s*Mia\s*:/i,pair[1]+':'));
+    const closers=['That sounds useful.','Let us take the next step.','Thanks for explaining that clearly.','I understand the situation now.','That plan works for me.'];
+    renamed.push(pair[cycle%2]+': '+closers[(cycle+index)%closers.length]);
+    return renamed.join('\n');
+  }
+
+  function practiceVariantItem(type,item,cycle,index) {
+    const value=$.extend(true,{},item||{}); if (!cycle) return value;
+    const names=['Noah','Olivia','Ethan','Ava','Lucas','Sophia','Daniel','Emma'],name=names[(cycle+index)%names.length],suffix=' · Bộ mới '+(cycle+1);
+    value.id=String(value.id||type+'-'+index)+'-cycle-'+cycle;
+    if (type==='listening') { value.audio=variantDialogue(value.audio,cycle,index); value.question=(['What is the main focus of this exchange?','Which idea best summarizes the conversation?','What are the speakers mainly discussing?'][(cycle+index)%3]); }
+    if (type==='reading') { value.title=String(value.title||'Reading')+suffix; value.passage=String(value.passage||'').replace(/\bSam\b/g,name)+' '+name+' writes down the most useful point before continuing.'; }
+    if (type==='speaking') { const extra=['This is important to me.','That is my next step.','This helps everyone understand.','I can explain the reason clearly.'][(cycle+index)%4]; value.target=String(value.target||'').trim()+' '+extra; value.vi=String(value.vi||'')+' Hãy đọc thêm câu kết để luyện phản xạ.'; }
+    if (type==='writing') { value.title=String(value.title||'Writing task')+suffix; value.instruction=String(value.instruction||'')+' Use a new example, explain one reason, and finish with a clear next step for '+name+'.'; }
+    if (type==='vocabulary') { value.example=String(value.example||'')+' '+['Use it again in a new situation.','Say one personal example aloud.','Connect it with your learning goal.'][(cycle+index)%3]; value.vi=String(value.vi||'')+' Đây là ngữ cảnh ôn mới.'; }
+    if (type==='challenge') { value.question='New scenario '+(cycle+1)+': '+String(value.question||''); if (value.audio) value.audio=variantDialogue(value.audio,cycle,index); if (value.passage) value.passage=String(value.passage).replace(/\bSam\b/g,name); }
+    return value;
+  }
+
   function activePracticeData(type) {
     const level=practiceData[state.level] ? state.level : 'A1';
     const goal=currentGoalId(),topic=type==='vocabulary'?(state.vocabularyTopic||'all'):(state.practiceTopic||'all');
     if (practiceSession.level!==level||practiceSession.goal!==goal||practiceSession.topic!==topic) resetPracticeSessions(level,goal,topic);
     const sourceDeck=curriculumDeck(type,topic),queueKey=type+'Queue',resultsKey=type+'Results';
-    if (['listening','reading','vocabulary'].includes(type) && !Array.isArray(practiceSession[queueKey])) {
-      practiceSession[queueKey]=sourceDeck.map((_,index)=>index);
-      if (type==='vocabulary') practiceSession[queueKey]=practiceSession[queueKey].sort((a,b)=>vocabularyStrength(level,sourceDeck[a])-vocabularyStrength(level,sourceDeck[b])).slice(0,Math.min(12,sourceDeck.length));
+    if (['listening','reading','speaking','writing','vocabulary'].includes(type) && !Array.isArray(practiceSession[queueKey])) {
+      practiceSession[queueKey]=buildPracticeQueue(type,sourceDeck);
       practiceSession[resultsKey]=[];
     }
-    const queue=Array.isArray(practiceSession[queueKey])?practiceSession[queueKey]:sourceDeck.map((_,index)=>index),deck=queue.map(index=>sourceDeck[index]);
-    const index=Math.min(Math.max(0,Number(practiceSession[type])||0),Math.max(0,deck.length-1)),itemIndex=queue[index]??index;
-    return {level,deck,sourceDeck,queue,index,itemIndex,item:sourceDeck[itemIndex]};
+    const queue=Array.isArray(practiceSession[queueKey])?practiceSession[queueKey]:buildPracticeQueue(type,sourceDeck),deck=queue.map((entry,position)=>practiceVariantItem(type,sourceDeck[entry.itemIndex],entry.variantCycle,position));
+    const index=Math.min(Math.max(0,Number(practiceSession[type])||0),Math.max(0,deck.length-1)),entry=queue[index]||{itemIndex:index,variantCycle:0},itemIndex=entry.itemIndex;
+    return {level,deck,sourceDeck,queue,index,itemIndex,entry,item:deck[index]};
   }
 
   function resetPracticeSessions(level,goal,topic) {
@@ -375,9 +488,7 @@
 
   function startFiniteSession(type,indexes) {
     const source=curriculumDeck(type);
-    const previous=(practiceSession[type+'Results']||[]).map(result=>result.itemIndex),previousSet=new Set(previous);
-    const fresh=indexes?.length?indexes.slice():(type==='vocabulary'?shuffledIndexes(source.length).filter(index=>!previousSet.has(index)).concat(shuffledIndexes(source.length).filter(index=>previousSet.has(index))):shuffledIndexes(source.length));
-    practiceSession[type]=0; practiceSession[type+'Queue']=type==='vocabulary'&&!indexes?.length?fresh.slice(0,Math.min(12,source.length)):fresh; practiceSession[type+'Results']=[];
+    practiceSession[type]=0; practiceSession[type+'Queue']=buildPracticeQueue(type,source,indexes); practiceSession[type+'Results']=[];
     if (type==='vocabulary') practiceSession.vocabularyQuiz=null;
     $('#practice-'+type).removeClass('session-complete'); $('#'+type+'Summary').addClass('hidden').empty(); renderPractice(type);
   }
@@ -394,6 +505,7 @@
     if (type==='writing') renderWriting();
     if (type==='vocabulary') updateFlashcard();
     if (type==='challenge') renderChallenge();
+    if (type==='exam'&&!examSession.active) renderExamBank();
   }
 
   function renderListening() {
@@ -432,24 +544,159 @@
     if (!CURRICULUM) return {deck:[],index:0,item:null};
     const generated=Array.isArray(practiceSession.aiChallengeDeck)&&practiceSession.aiChallengeDeck.length?practiceSession.aiChallengeDeck:null;
     const source=generated||CURRICULUM.getExercises(currentGoalId(),state.level,state.challengeType||'all',state.challengeTopic||'all').filter(item=>!['speaking','writing'].includes(item.type));
-    if (reset||!Array.isArray(practiceSession.challengeQueue)||practiceSession.challengeQueue.some(index=>index>=source.length)) {
-      const randomOrder=shuffledIndexes(source.length),randomRank={}; randomOrder.forEach((value,index)=>{ randomRank[value]=index; });
-      practiceSession.challengeQueue=source.map((_,index)=>index).sort((a,b)=>exerciseStrength(source[a])-exerciseStrength(source[b])||randomRank[a]-randomRank[b]).slice(0,Math.min(20,source.length)); practiceSession.challenge=0; practiceSession.challengeResults=[];
+    if (reset||!Array.isArray(practiceSession.challengeQueue)||practiceSession.challengeQueue.some(entry=>Number(entry?.itemIndex)>=source.length)) {
+      practiceSession.challengeQueue=generated?shuffledIndexes(source.length).slice(0,Math.min(20,source.length)).map(itemIndex=>({itemIndex,variantCycle:0})):buildPracticeQueue('challenge',source);
+      practiceSession.challenge=0; practiceSession.challengeResults=[];
     }
-    const deck=practiceSession.challengeQueue.map(index=>source[index]),index=Math.min(Number(practiceSession.challenge)||0,Math.max(0,deck.length-1));
-    return {source,deck,index,item:deck[index]};
+    const deck=practiceSession.challengeQueue.map((entry,position)=>practiceVariantItem('challenge',source[entry.itemIndex],entry.variantCycle,position)),index=Math.min(Number(practiceSession.challenge)||0,Math.max(0,deck.length-1));
+    return {source,deck,index,item:deck[index],entry:practiceSession.challengeQueue[index]};
   }
 
   function renderChallenge(reset) {
     if (!CURRICULUM) return;
     const typeOptions='<option value="all">Trộn 8 dạng bài</option>'+CURRICULUM.types.filter(type=>!['speaking','writing'].includes(type[0])).map(type=>`<option value="${type[0]}">${escapeHtml(type[1])}</option>`).join('');
     $('#challengeTypeSelect').html(typeOptions).val(state.challengeType||'all'); populateTopicSelect('#challengeTopicSelect',state.challengeTopic||'all');
+    const generated=Array.isArray(practiceSession.aiChallengeDeck)&&practiceSession.aiChallengeDeck.length;
     const {deck,index,item}=activeChallengeData(reset); if (!item) return;
     $('#practice-challenge').removeClass('session-complete'); $('#challengeSummary').addClass('hidden').empty();
-    $('#challengeLevel').text((generated?'AI PRACTICE SET':'PRACTICE LAB')+' · '+state.level+' · ƯU TIÊN NỘI DUNG YẾU'); $('#challengeProgress').text('Câu '+(index+1)+' / '+deck.length); $('#challengeTypeLabel').text(item.typeLabel.toUpperCase()+' · '+String(item.topicEn||item.topic).toUpperCase()); $('#challengeQuestion').text(item.question);
+    $('#challengeLevel').text((generated?'AI PRACTICE SET':'PRACTICE LAB')+' · '+state.level+' · PHIÊN KHÔNG LẶP'); $('#challengeProgress').text('Câu '+(index+1)+' / '+deck.length); $('#challengeTypeLabel').text(item.typeLabel.toUpperCase()+' · '+String(item.topicEn||item.topic).toUpperCase()); $('#challengeQuestion').text(item.question);
     $('#challengeAnswers').removeData('done').html(choiceButtons(item.options,item.options.indexOf(item.answer))); $('#challengeFeedback').removeClass('show success error').empty(); $('#challengeAiFeedback').removeClass('show').empty(); $('#explainChallenge,#nextChallenge').addClass('hidden');
     $('#playChallengeAudio').toggleClass('hidden',!item.audio).data('audio',item.audio||'');
     $('#challengePassage').toggleClass('hidden',!item.passage).text(item.passage||'');
+  }
+
+  const EXAM_TYPE_LABELS={listening:'Nghe',dictation:'Nghe chính tả',reading:'Đọc',speaking:'Nói',writing:'Viết',ordering:'Sắp xếp từ',grammar:'Ngữ pháp',tense:'Các thì',cloze:'Điền từ'};
+
+  function buildTenseQuestion(level,seed,examNumber,slot,theme) {
+    const names=['Maya','Noah','Liam','Emma','Leo','Sofia','Daniel','Chloe'],verbs=[
+      {base:'write',third:'writes',past:'wrote',pp:'written',ing:'writing',object:'a short report'},
+      {base:'send',third:'sends',past:'sent',pp:'sent',ing:'sending',object:'the confirmation email'},
+      {base:'build',third:'builds',past:'built',pp:'built',ing:'building',object:'a useful prototype'},
+      {base:'choose',third:'chooses',past:'chose',pp:'chosen',ing:'choosing',object:'the best option'},
+      {base:'take',third:'takes',past:'took',pp:'taken',ing:'taking',object:'careful notes'},
+      {base:'make',third:'makes',past:'made',pp:'made',ing:'making',object:'a clear plan'},
+      {base:'find',third:'finds',past:'found',pp:'found',ing:'finding',object:'the right answer'},
+      {base:'give',third:'gives',past:'gave',pp:'given',ing:'giving',object:'helpful feedback'}
+    ],name=names[(seed+examNumber)%names.length],verb=verbs[seed%verbs.length],mode=seed%4;
+    let question='',answer='',options=[];
+    if (level==='A1') {
+      if (mode===0) { question=`${name} ___ ${verb.object} every Monday.`; answer=verb.third; options=[verb.third,verb.base,verb.past]; }
+      if (mode===1) { question=`${name} is ___ ${verb.object} right now.`; answer=verb.ing; options=[verb.ing,verb.base,verb.past]; }
+      if (mode===2) { question=`Yesterday, ${name} ___ ${verb.object}.`; answer=verb.past; options=[verb.past,verb.third,verb.ing]; }
+      if (mode===3) { question=`${name} ___ ready for task ${examNumber}.${slot}.`; answer='is'; options=['is','are','be']; }
+    } else if (level==='A2') {
+      if (mode===0) { question=`Last week, ${name} ___ ${verb.object}.`; answer=verb.past; options=[verb.past,verb.pp,verb.third]; }
+      if (mode===1) { question=`${name} has just ___ ${verb.object}.`; answer=verb.pp; options=[verb.pp,verb.past,verb.ing]; }
+      if (mode===2) { question=`Tomorrow, ${name} is going to ___ ${verb.object}.`; answer=verb.base; options=[verb.base,verb.past,verb.ing]; }
+      if (mode===3) { question=`When I called, ${name} was ___ ${verb.object}.`; answer=verb.ing; options=[verb.ing,verb.pp,verb.third]; }
+    } else if (level==='B1') {
+      if (mode===0) { question=`${name} has ___ ${verb.object} since early this morning.`; answer=verb.pp; options=[verb.pp,verb.past,verb.ing]; }
+      if (mode===1) { question=`${name} had ___ ${verb.object} before the meeting began.`; answer=verb.pp; options=[verb.pp,verb.past,verb.third]; }
+      if (mode===2) { question=`If ${name} finishes early, they will ___ ${verb.object}.`; answer=verb.base; options=[verb.base,verb.past,verb.pp]; }
+      if (mode===3) { question=`While ${name} was ___ ${verb.object}, the client called.`; answer=verb.ing; options=[verb.ing,verb.pp,verb.third]; }
+    } else {
+      if (mode===0) { question=`By next Friday, ${name} will have ___ ${verb.object}.`; answer=verb.pp; options=[verb.pp,verb.past,verb.ing]; }
+      if (mode===1) { question=`${name} has been ___ ${verb.object} for two hours.`; answer=verb.ing; options=[verb.ing,verb.pp,verb.third]; }
+      if (mode===2) { question=`If ${name} had ___ ${verb.object}, the delay could have been avoided.`; answer=verb.pp; options=[verb.pp,verb.past,verb.base]; }
+      if (mode===3) { question=`Only after ${name} had ___ ${verb.object} did the team proceed.`; answer=verb.pp; options=[verb.pp,verb.past,verb.ing]; }
+    }
+    const order=seededIndexes(options.length,stableHash(level+'|tense|'+seed+'|'+examNumber)); options=order.map(index=>options[index]);
+    return {id:`exam-${level}-${examNumber}-tense-${slot}`,type:'tense',typeLabel:'Các thì',question:`${theme||'Tense practice'} · ${slot}. ${question}`,options,answer,explanation:'Dấu hiệu thời gian và cấu trúc câu quyết định dạng động từ phù hợp.'};
+  }
+
+  function examSourceItem(level,type,absolute,examNumber,slot,theme) {
+    const source=CURRICULUM?.getExercises(currentGoalId(),level,type,'all')||[]; if (!source.length) return null;
+    const cycle=Math.floor(absolute/source.length),base=source[absolute%source.length],value=practiceVariantItem(type,base,cycle,absolute);
+    value.id=`exam-${currentGoalId()}-${level}-${examNumber}-${slot}-${type}`; value.type=type; value.typeLabel=EXAM_TYPE_LABELS[type]||value.typeLabel||type;
+    if (!value.answer&&Array.isArray(value.options)&&Number.isInteger(Number(value.correct))) value.answer=value.options[Number(value.correct)];
+    if (type==='writing') {
+      const requirements=['Give one concrete example and a clear next action.','Explain one reason and one expected result.','Describe a small problem and propose a practical solution.','Compare two choices and state which one you prefer.'];
+      value.instruction=`${theme} · Writing task ${slot+1}. ${value.instruction||value.question||''} ${requirements[(examNumber+slot)%requirements.length]}`;
+    }
+    value.question=`${theme} · ${slot+1}. ${value.question||value.instruction||value.target||''}`;
+    return value;
+  }
+
+  function buildExamBank(level) {
+    if (!CURRICULUM) return [];
+    const units=CURRICULUM.getRoadmap(currentGoalId(),level),baseMinutes={A1:25,A2:30,B1:35,B2:40}[level]||30;
+    return Array.from({length:20},(_,examIndex)=>{
+      const examNumber=examIndex+1,unit=units[examIndex%units.length],theme=unit.englishTitle+(examIndex>=12?' · Applied mission':' · Skills mission'),items=[],counts={};
+      const add=type=>{
+        const local=counts[type]||0; counts[type]=local+1;
+        if (type==='tense') { items.push(buildTenseQuestion(level,examIndex*2+local,examNumber,items.length+1,theme)); return; }
+        const perExam={listening:3,reading:2,speaking:2,writing:2}[type]||1,absolute=examIndex*perExam+local,item=examSourceItem(level,type,absolute,examNumber,items.length,theme);
+        if (item) items.push(item);
+      };
+      add('listening'); add('reading'); add('grammar'); add('tense'); add('speaking'); add('ordering'); add('listening'); add('writing'); add('cloze'); add('reading'); add('tense'); add('speaking'); add('dictation'); add('writing'); add('listening');
+      return {id:`${currentGoalId()}-${level}-exam-${examNumber}`,number:examNumber,level,title:`Đề ${String(examNumber).padStart(2,'0')} · ${unit.englishTitle}`,theme,durationMinutes:baseMinutes+Math.floor(examIndex/5)*3,items};
+    });
+  }
+
+  function examResultKey(exam) { return [currentGoalId(),exam.level,exam.id].join(':'); }
+  function formatExamTime(seconds) { const value=Math.max(0,Math.round(Number(seconds)||0)); return String(Math.floor(value/60)).padStart(2,'0')+':'+String(value%60).padStart(2,'0'); }
+
+  function renderExamBank() {
+    if (!CURRICULUM) return;
+    clearInterval(examSession.timer); examSession.timer=null; examSession.active=false; stopExamRecording(true); $('#practiceLevelSelect,#practiceGoalSelect,#vocabularyGoalSelect').prop('disabled',false);
+    const exams=buildExamBank(state.level),records=state.examResults||{},completed=exams.filter(exam=>records[examResultKey(exam)]),passed=exams.filter(exam=>Number(records[examResultKey(exam)]?.bestScore)>=70),best=exams.reduce((score,exam)=>Math.max(score,Number(records[examResultKey(exam)]?.bestScore)||0),0);
+    $('#examLevelLabel').text('LUYỆN ĐỀ · '+state.level+' · '+currentGoal().name.toUpperCase());
+    $('#examOverview').html(`<div><strong>${completed.length}/20</strong><span>ĐÃ LÀM</span></div><div><strong>${passed.length}</strong><span>ĐÃ PASS</span></div><div><strong>${best}%</strong><span>ĐIỂM CAO NHẤT</span></div>`);
+    $('#examBadgeGrid').html(exams.map(exam=>{ const result=records[examResultKey(exam)],status=!result?'new':Number(result.bestScore)>=70?'passed':'failed'; return `<button type="button" class="exam-badge ${status}" data-exam-index="${exam.number-1}"><span class="exam-number">${String(exam.number).padStart(2,'0')}</span><strong>Đề ${String(exam.number).padStart(2,'0')}</strong><small>⏱ ${exam.durationMinutes} phút</small><em>${result?'Cao nhất '+result.bestScore+'%':'Chưa làm'}</em></button>`; }).join(''));
+    const history=Object.values(records).filter(record=>record.goalId===currentGoalId()&&record.level===state.level).flatMap(record=>(record.history||[]).map(item=>Object.assign({examNumber:record.examNumber},item))).sort((a,b)=>String(b.completedAt).localeCompare(String(a.completedAt))).slice(0,8);
+    $('#examHistoryCount').text(history.length?history.length+' lượt gần nhất':'Chưa làm đề nào');
+    $('#examHistoryList').html(history.length?history.map(item=>`<div><span class="history-exam-number">${String(item.examNumber).padStart(2,'0')}</span><strong>Đề ${String(item.examNumber).padStart(2,'0')}</strong><small>${new Date(item.completedAt).toLocaleString('vi-VN')} · ${formatExamTime(item.durationSeconds)}</small><b class="${item.score>=70?'passed':'failed'}">${item.score}%</b></div>`).join(''):'<p class="empty-exam-history">Kết quả mỗi lần luyện đề sẽ được lưu tại đây.</p>');
+    $('#examBankView').removeClass('hidden'); $('#examPlayer,#examResult').addClass('hidden');
+  }
+
+  function startExam(examIndex) {
+    const exam=buildExamBank(state.level)[Number(examIndex)]; if (!exam) return;
+    if (!confirm(`Bắt đầu ${exam.title}? Bạn có ${exam.durationMinutes} phút và đồng hồ sẽ chạy liên tục.`)) return;
+    examSession.active=true; examSession.exam=exam; examSession.index=0; examSession.scores=[]; examSession.answers=[]; examSession.startedAt=Date.now(); examSession.secondsLeft=exam.durationMinutes*60; examSession.answered=false;
+    $('#practiceLevelSelect,#practiceGoalSelect,#vocabularyGoalSelect').prop('disabled',true);
+    $('#examBankView,#examResult').addClass('hidden'); $('#examPlayer').removeClass('hidden'); updateExamTimer(); clearInterval(examSession.timer); examSession.timer=setInterval(()=>{ examSession.secondsLeft--; updateExamTimer(); if (examSession.secondsLeft<=0) finishExam(true); },1000); renderExamQuestion();
+  }
+
+  function updateExamTimer() { $('#examTimer').text(formatExamTime(examSession.secondsLeft)).toggleClass('warning',examSession.secondsLeft<=300); }
+
+  function examQuestionHtml(item) {
+    const type=item.type;
+    if (type==='speaking') return `<div class="exam-speaking-card"><button type="button" class="exam-sample">♫ Nghe câu mẫu</button><h2>${escapeHtml(item.target||item.question)}</h2><p>${escapeHtml(item.vi||'Đọc đầy đủ và rõ ràng câu trên.')}</p><button type="button" class="exam-record-btn"><span>●</span></button><strong id="examRecordLabel">Nhấn để bắt đầu ghi</strong><div class="exam-transcript" id="examTranscript">Lời bạn nói sẽ xuất hiện ở đây...</div><button type="button" class="primary-btn wide hidden" id="gradeExamSpeaking">✦ Chấm phần nói</button></div>`;
+    if (type==='writing') return `<div class="exam-writing-card"><h2>${escapeHtml(item.title||'Writing task')}</h2><p>${escapeHtml(item.instruction||item.question)}</p><textarea id="examWritingInput" maxlength="900" placeholder="Write your answer in English..."></textarea><div><span>Tối thiểu ${item.minWords||20} từ</span><b><i id="examWritingCount">0</i>/900</b></div><button type="button" class="primary-btn wide" id="gradeExamWriting">✦ Nộp phần viết</button></div>`;
+    const media=item.audio?`<button type="button" class="exam-audio-button" data-audio="${escapeHtml(item.audio)}"><span>▶</span><strong>Nghe đoạn ghi âm</strong></button>`:'',passage=item.passage?`<div class="exam-reading-passage">${escapeHtml(item.passage)}</div>`:'';
+    return `${media}${passage}<h2>${escapeHtml(item.question)}</h2><div class="answer-list exam-options">${choiceButtons(item.options||[],(item.options||[]).indexOf(item.answer))}</div>`;
+  }
+
+  function renderExamQuestion() {
+    if (!examSession.active||!examSession.exam) return;
+    stopExamRecording(true); examSession.answered=false; examAudio=null; examTranscript='';
+    const exam=examSession.exam,item=exam.items[examSession.index];
+    $('#examTitle').text(exam.title); $('#examQuestionNumber').text('Câu '+(examSession.index+1)+' / '+exam.items.length); $('#examQuestionType').text((EXAM_TYPE_LABELS[item.type]||item.type).toUpperCase()); $('#examProgressBar').css('width',((examSession.index)/exam.items.length*100)+'%');
+    $('#examQuestionBody').html(examQuestionHtml(item)); $('#examQuestionFeedback').removeClass('show success error').empty(); $('#nextExamQuestion').addClass('hidden').text(examSession.index>=exam.items.length-1?'Nộp bài & xem điểm →':'Câu tiếp theo →');
+  }
+
+  function recordExamAnswer(score,answer,feedback) {
+    if (!examSession.active||examSession.answered) return; examSession.answered=true;
+    examSession.scores[examSession.index]=Math.max(0,Math.min(100,Math.round(Number(score)||0))); examSession.answers[examSession.index]=answer||'';
+    $('#examQuestionFeedback').attr('class','exam-question-feedback show '+(score>=70?'success':'error')).html(feedback||('Điểm câu này: '+examSession.scores[examSession.index]+'/100')); $('#nextExamQuestion').removeClass('hidden');
+  }
+
+  function finishExam(timedOut) {
+    if (!examSession.exam||!examSession.active) return; examSession.active=false; clearInterval(examSession.timer); examSession.timer=null; stopExamRecording(true);
+    const exam=examSession.exam; while (examSession.scores.length<exam.items.length) examSession.scores.push(0);
+    const score=Math.round(examSession.scores.reduce((sum,value)=>sum+(Number(value)||0),0)/exam.items.length),passed=score>=70,durationSeconds=Math.max(1,Math.round((Date.now()-examSession.startedAt)/1000)),groups={};
+    exam.items.forEach((item,index)=>{ const group=['dictation'].includes(item.type)?'listening':['ordering','grammar','tense','cloze'].includes(item.type)?'language':item.type; groups[group]=groups[group]||[]; groups[group].push(examSession.scores[index]||0); });
+    const skillScores=Object.keys(groups).map(group=>({group,label:{listening:'Nghe',reading:'Đọc',speaking:'Nói',writing:'Viết',language:'Ngữ pháp'}[group]||group,score:Math.round(groups[group].reduce((a,b)=>a+b,0)/groups[group].length)}));
+    state.examResults=state.examResults||{}; const key=examResultKey(exam),previous=state.examResults[key]||{attempts:0,bestScore:0,history:[]},attempt={score,passed,completedAt:new Date().toISOString(),durationSeconds,timedOut:!!timedOut,skills:skillScores,answers:examSession.answers.slice(0,exam.items.length)};
+    state.examResults[key]={goalId:currentGoalId(),level:exam.level,examId:exam.id,examNumber:exam.number,title:exam.title,attempts:Number(previous.attempts||0)+1,bestScore:Math.max(Number(previous.bestScore)||0,score),lastScore:score,completedAt:attempt.completedAt,history:[attempt].concat(previous.history||[]).slice(0,10)};
+    const earnedMinutes=Math.max(1,Math.round(durationSeconds/60)),day=(new Date().getDay()+6)%7;
+    state.xp+=passed?75:30; state.minutesWeek+=earnedMinutes; state.week[day]=(state.week[day]||0)+earnedMinutes; saveState(true); $('#practiceLevelSelect,#practiceGoalSelect,#vocabularyGoalSelect').prop('disabled',false);
+    $('#examPlayer,#examBankView').addClass('hidden'); $('#examResult').removeClass('hidden').html(`<img src="assets/mochi.png" alt="Mochi"><span class="section-kicker">${timedOut?'HẾT GIỜ · ĐÃ TỰ ĐỘNG NỘP BÀI':'ĐÃ HOÀN THÀNH '+escapeHtml(exam.title)}</span><h2>${passed?'Bạn đã vượt qua đề thi!':'Chưa đạt 70% · hãy ôn và thử lại'}</h2><div class="exam-final-score ${passed?'passed':'failed'}"><strong>${score}</strong><span>/100</span></div><div class="exam-skill-results">${skillScores.map(skill=>`<div><span>${skill.label}</span><i><b style="width:${skill.score}%"></b></i><strong>${skill.score}%</strong></div>`).join('')}</div><div class="summary-actions"><button type="button" class="secondary-btn exam-back-bank">← Danh sách đề</button><button type="button" class="primary-btn exam-retry" data-exam-index="${exam.number-1}">Làm lại đề ${String(exam.number).padStart(2,'0')}</button></div>`);
+    if (passed) confetti();
+  }
+
+  function abortExam() {
+    clearInterval(examSession.timer); examSession.timer=null; examSession.active=false; examSession.exam=null; stopExamRecording(true); renderExamBank();
   }
 
   function nextPractice(type) {
@@ -512,7 +759,7 @@
   }
 
   function speakerGender(name) {
-    return /^(mia|anna|linh|emma|sarah|jenny|mary|lisa|woman|female)$/i.test(String(name||'').trim())?'female':'male';
+    return /^(mia|anna|linh|emma|sarah|jenny|mary|lisa|olivia|ava|sophia|chloe|woman|female)$/i.test(String(name||'').trim())?'female':'male';
   }
 
   function selectDialogueVoice(gender,voices,used) {
@@ -536,17 +783,23 @@
     if (!('speechSynthesis' in window)) return toast('Trình duyệt chưa hỗ trợ đọc văn bản.', 'error');
     const segments=String(text||'').split(/\n+/).map(line=>{ const match=line.match(/^\s*([^:]{1,24}):\s*(.+)$/); return match?{speaker:match[1].trim(),text:match[2].trim()}:null; }).filter(Boolean);
     if (segments.length<2||new Set(segments.map(segment=>segment.speaker.toLowerCase())).size<2) return speak(text,rateMultiplier);
-    const playbackToken=++speechPlaybackToken; speechSynthesis.cancel();
-    const voices=englishVoices(),used=new Set(),voiceBySpeaker={},controller={onend:null};
-    segments.forEach(segment=>{ const key=segment.speaker.toLowerCase(); if (!voiceBySpeaker[key]) { const gender=speakerGender(segment.speaker),voice=selectDialogueVoice(gender,voices,used); voiceBySpeaker[key]={voice,gender}; if (voice) used.add(voice.name); } });
-    let index=0;
-    const playNext=()=>{
+    const playbackToken=++speechPlaybackToken; speechSynthesis.cancel(); const controller={onend:null};
+    const begin=(attempt)=>{
       if (playbackToken!==speechPlaybackToken) return;
-      if (index>=segments.length) { if (typeof controller.onend==='function') controller.onend(); return; }
-      const segment=segments[index++],profile=voiceBySpeaker[segment.speaker.toLowerCase()],pitch=profile.gender==='female'?1.12:.9,utterance=speechUtterance(segment.text,rateMultiplier,profile.voice,pitch);
-      utterance.onend=playNext; utterance.onerror=playNext; speechSynthesis.speak(utterance);
+      const voices=englishVoices();
+      if (!voices.length&&attempt<8) return setTimeout(()=>begin(attempt+1),120);
+      const used=new Set(),voiceBySpeaker={};
+      segments.forEach(segment=>{ const key=segment.speaker.toLowerCase(); if (!voiceBySpeaker[key]) { const gender=speakerGender(segment.speaker),voice=selectDialogueVoice(gender,voices,used); voiceBySpeaker[key]={voice,gender}; if (voice) used.add(voice.name); } });
+      let index=0;
+      const playNext=()=>{
+        if (playbackToken!==speechPlaybackToken) return;
+        if (index>=segments.length) { if (typeof controller.onend==='function') controller.onend(); return; }
+        const segment=segments[index++],profile=voiceBySpeaker[segment.speaker.toLowerCase()],female=profile.gender==='female',pitch=female?1.2:.8,roleRate=female?1.04:.93,utterance=speechUtterance(segment.text,(Number(rateMultiplier)||1)*roleRate,profile.voice,pitch);
+        utterance.onend=()=>setTimeout(playNext,120); utterance.onerror=()=>setTimeout(playNext,80); speechSynthesis.speak(utterance);
+      };
+      playNext();
     };
-    playNext(); return controller;
+    begin(0); return controller;
   }
 
   function spokenContentCoverage(target,spoken) {
@@ -919,6 +1172,65 @@
     if (mediaStream) { mediaStream.getTracks().forEach(track => track.stop()); mediaStream = null; }
   }
 
+  function startExamRecognitionCycle() {
+    const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if (!examRecording||!Recognition||examRecognition) return;
+    const instance=new Recognition(); examRecognition=instance; instance.lang='en-US'; instance.interimResults=true; instance.continuous=true; instance.maxAlternatives=1;
+    instance.onresult=event=>{
+      let finalText='',interimText='';
+      for (let i=0;i<event.results.length;i++) {
+        const part=String(event.results[i][0]?.transcript||'').trim(); if (!part) continue;
+        if (event.results[i].isFinal) finalText+=(finalText?' ':'')+part; else interimText+=(interimText?' ':'')+part;
+      }
+      examTranscript=[examRecognitionBase,finalText,interimText].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+      $('#examTranscript').text(examTranscript||'Đang nghe... hãy đọc đầy đủ câu mẫu.');
+    };
+    instance.onerror=event=>{
+      const error=String(event.error||'');
+      if (['not-allowed','service-not-allowed'].includes(error)) $('#examRecordLabel').text('Đang ghi âm · trình duyệt chưa cấp quyền tạo transcript');
+      else if (!['no-speech','aborted'].includes(error)) $('#examRecordLabel').text('Đang ghi âm · nhận diện giọng nói đang kết nối lại');
+    };
+    instance.onend=()=>{
+      if (examRecognition===instance) examRecognition=null;
+      examRecognitionBase=examTranscript.trim();
+      if (examRecording) { clearTimeout(examRecognitionRestartTimer); examRecognitionRestartTimer=setTimeout(startExamRecognitionCycle,180); }
+    };
+    try { instance.start(); } catch (_) { examRecognition=null; if (examRecording) examRecognitionRestartTimer=setTimeout(startExamRecognitionCycle,350); }
+  }
+
+  async function startExamRecording() {
+    if (examRecording) return;
+    examTranscript=''; examRecognitionBase=''; examAudio=null; examChunks=[]; examAudioReady=Promise.resolve();
+    const canRecognize=!!(window.SpeechRecognition||window.webkitSpeechRecognition),canRecord=!!(navigator.mediaDevices?.getUserMedia&&window.MediaRecorder);
+    if (!canRecognize&&!canRecord) throw new Error('Trình duyệt chưa hỗ trợ ghi hoặc nhận diện giọng nói.');
+    if (canRecord) {
+      const stream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}); examStream=stream;
+      const preferred=['audio/webm;codecs=opus','audio/webm','audio/mp4'].find(type=>MediaRecorder.isTypeSupported(type)),recorder=new MediaRecorder(stream,preferred?{mimeType:preferred}:undefined); examRecorder=recorder;
+      examAudioReady=new Promise(resolve=>{
+        recorder.ondataavailable=event=>{ if (event.data.size) examChunks.push(event.data); };
+        recorder.onstop=()=>{
+          const blob=new Blob(examChunks,{type:recorder.mimeType||'audio/webm'});
+          if (!blob.size||blob.size>=6*1024*1024) { if (blob.size>=6*1024*1024) toast('Bản ghi quá dài; phần nói sẽ được chấm theo transcript.','error'); resolve(); return; }
+          const reader=new FileReader(); reader.onloadend=()=>{ examAudio={audioData:String(reader.result).split(',')[1],audioMime:blob.type||'audio/webm'}; resolve(); }; reader.onerror=()=>resolve(); reader.readAsDataURL(blob);
+        };
+      });
+      recorder.start();
+    }
+    examRecording=true; startExamRecognitionCycle();
+    $('.exam-record-btn').addClass('recording').attr('aria-pressed','true').find('span').text('■'); $('#examRecordLabel').text('Đang ghi liên tục · nhấn Stop khi nói xong'); $('#examTranscript').text('Đang nghe...'); $('#gradeExamSpeaking').addClass('hidden');
+  }
+
+  async function stopExamRecording(silent) {
+    examRecording=false; clearTimeout(examRecognitionRestartTimer); examRecognitionRestartTimer=null;
+    const recognitionInstance=examRecognition; examRecognition=null; if (recognitionInstance) try { recognitionInstance.stop(); } catch (_) { try { recognitionInstance.abort(); } catch (__) {} }
+    const recorder=examRecorder,stream=examStream,audioReady=examAudioReady; examRecorder=null; examStream=null;
+    if (recorder&&recorder.state!=='inactive') try { recorder.stop(); } catch (_) {}
+    if (stream) stream.getTracks().forEach(track=>track.stop());
+    if (audioReady) try { await audioReady; } catch (_) {}
+    $('.exam-record-btn').removeClass('recording').attr('aria-pressed','false').find('span').text('●');
+    if (!silent) { $('#examRecordLabel').text(examTranscript?'Đã ghi nhận lời nói · sẵn sàng chấm điểm':'Đã ghi âm · sẵn sàng chấm điểm'); $('#gradeExamSpeaking').toggleClass('hidden',!(examTranscript||examAudio)); }
+  }
+
   function bindEvents() {
     $(document).on('click','[data-auth-tab]',function(){
       const tab=$(this).data('auth-tab'); clearAuthMessage();
@@ -951,7 +1263,7 @@
     $('#lessonModal').on('click', function(e){ if (e.target === this) closeLesson(); });
     $(document).on('click','.lesson-next', nextLesson);
     $(document).on('click','.lesson-sound',()=>{ const step=lessonSteps[currentLessonStep]; if (step?.question) speak(step.question); });
-    $(document).on('click','.lesson-audio',()=>{ const step=lessonSteps[currentLessonStep]; if (step?.audio) speak(step.audio); });
+    $(document).on('click','.lesson-audio',()=>{ const step=lessonSteps[currentLessonStep]; if (step?.audio) speakDialogue(step.audio); });
     $(document).on('click','.guidebook-sound',function(){ speak($(this).data('phrase')||''); });
     $(document).on('click','.lesson-options button', function(){ selectedLessonAnswer = Number($(this).data('answer')); $('.lesson-options button').removeClass('selected'); $(this).addClass('selected'); $('.lesson-check').prop('disabled',false); });
     $(document).on('click','.lesson-check', function(){
@@ -986,7 +1298,7 @@
       const target=type==='listening'?'#listeningFeedback':'#readingFeedback',explanation=item.explanation||('Đáp án đúng: '+item.options[item.correct]),status=correct?'✓ Chính xác!':'Chưa đúng.';
       const englishAnswer=type==='listening'?`<div class="listening-answer-english"><strong>English answer</strong><span>${escapeHtml(item.audio)}</span><button type="button" class="replay-listening-answer">▶ Nghe lại</button></div>`:'';
       $(target).attr('class','exercise-feedback show '+(correct?'success':'error')).html(`<span>${escapeHtml(status+' '+explanation+(correct?' +5 XP':''))}</span>${englishAnswer}`);
-      practiceSession[type+'Results'].push({itemIndex:data.itemIndex,correct});
+      practiceSession[type+'Results'].push({itemIndex:data.itemIndex,variantCycle:data.entry?.variantCycle||0,correct});
       updateExerciseMastery(item,correct);
       state.practiceStats[type]=state.practiceStats[type]||{done:0,correct:0}; state.practiceStats[type].done++; if (correct) state.practiceStats[type].correct++;
       if (!correct) state.mistakes.unshift({type:type==='listening'?'Nghe':'Đọc',wrong:$(this).text().replace(/^[A-Z]\s*/,''),right:item.options[item.correct],note:item.question});
@@ -1024,7 +1336,7 @@
         showAiFeedback('#speechFeedback',data,'speech');
         $('#speechFeedback').append(`<div class="speaking-pass-gate ${passed?'passed':'retry'}"><strong>${passed?'✓ PASS':'↻ CHƯA PASS'}</strong><span>${passed?'Bạn đã đọc đủ câu và đạt phát âm '+pronunciationScore+'/100. Có thể sang câu tiếp theo.':'Tổng '+score+'/100 · Nội dung '+coverage+'% · Phát âm '+pronunciationScore+'/100. Nhấn micro và đọc lại đầy đủ câu mẫu.'}</span></div>`);
         state.practiceStats.speaking.done++; updateExerciseMastery(item,passed); $('#analyzeSpeech').addClass('hidden');
-        if (passed) { practiceSession.speakingResults.push({itemIndex:active.itemIndex,correct:true,score,coverage}); state.practiceStats.speaking.correct=Number(state.practiceStats.speaking.correct||0)+1; addXp(8,3); $('#nextSpeaking').removeClass('hidden'); }
+        if (passed) { practiceSession.speakingResults.push({itemIndex:active.itemIndex,variantCycle:active.entry?.variantCycle||0,correct:true,score,coverage}); state.practiceStats.speaking.correct=Number(state.practiceStats.speaking.correct||0)+1; addXp(8,3); $('#nextSpeaking').removeClass('hidden'); }
         else { saveState(true); $('#nextSpeaking').addClass('hidden'); $('#recordLabel').text('Chưa đạt · nhấn micro để đọc lại câu đầy đủ'); }
       }
       catch (e) { $('#speechFeedback').removeClass('show'); toast(e.responseJSON?.error || e.message || 'Gemini chưa thể nhận xét.', 'error'); }
@@ -1038,7 +1350,7 @@
       const active=activePracticeData('writing'),item=active.item,text=$('#writingInput').val().trim(),wordCount=text?text.split(/\s+/).length:0; if (!item) return;
       if (wordCount<item.minWords) return toast('Hãy viết ít nhất '+item.minWords+' từ cho đề này nhé!','error');
       showLoading('#writingFeedback','Gemini đang đọc và sửa bài của bạn...'); $(this).prop('disabled',true);
-      try { const data = await askGemini('writing',text,'Writing task: '+item.instruction); const score=Math.max(0,Math.min(100,Number(data.score)||0)),correct=score>=70; showAiFeedback('#writingFeedback',data,'writing'); practiceSession.writingResults.push({itemIndex:active.itemIndex,correct,score}); updateExerciseMastery(item,correct); state.practiceStats.writing.done++; state.practiceStats.writing.correct=Number(state.practiceStats.writing.correct||0)+(correct?1:0); addXp(12,4); if (data.corrected&&data.corrected!==text) state.mistakes.unshift({type:'Ngữ pháp',wrong:text.slice(0,90),right:data.corrected.slice(0,90),note:item.title}); saveState(true); $('#checkWriting').addClass('hidden'); $('#nextWriting').removeClass('hidden'); }
+      try { const data = await askGemini('writing',text,'Writing task: '+item.instruction); const score=Math.max(0,Math.min(100,Number(data.score)||0)),correct=score>=70; showAiFeedback('#writingFeedback',data,'writing'); practiceSession.writingResults.push({itemIndex:active.itemIndex,variantCycle:active.entry?.variantCycle||0,correct,score}); updateExerciseMastery(item,correct); state.practiceStats.writing.done++; state.practiceStats.writing.correct=Number(state.practiceStats.writing.correct||0)+(correct?1:0); addXp(12,4); if (data.corrected&&data.corrected!==text) state.mistakes.unshift({type:'Ngữ pháp',wrong:text.slice(0,90),right:data.corrected.slice(0,90),note:item.title}); saveState(true); $('#checkWriting').addClass('hidden'); $('#nextWriting').removeClass('hidden'); }
       catch(e) { $('#writingFeedback').removeClass('show'); toast(e.responseJSON?.error || e.message || 'Gemini chưa thể sửa bài.', 'error'); }
       finally { $(this).prop('disabled',false); }
     });
@@ -1047,7 +1359,7 @@
     $('#flashcard').on('click keydown', function(e){ if (e.type === 'click' || e.key === 'Enter' || e.key === ' ') $(this).toggleClass('flipped'); });
     $('.flash-actions button').on('click', function(){
       const data=activePracticeData('vocabulary'),isEasy=$(this).data('memory')==='easy';
-      practiceSession.vocabularyResults.push({itemIndex:data.itemIndex,correct:isEasy});
+      practiceSession.vocabularyResults.push({itemIndex:data.itemIndex,variantCycle:data.entry?.variantCycle||0,correct:isEasy});
       const isNewWord=updateVocabularyReview(data.level,data.item,isEasy);
       if (isEasy) { if (isNewWord) state.wordsLearned++; addXp(2,1); }
       else saveState(true);
@@ -1083,7 +1395,7 @@
       } catch(error) { toast(error.message||'Chưa thể tạo bộ bài AI.','error'); }
       finally { $button.prop('disabled',false).text('✦ AI tạo bộ mới'); }
     });
-    $('#playChallengeAudio').on('click',function(){ speak($(this).data('audio')||''); });
+    $('#playChallengeAudio').on('click',function(){ speakDialogue($(this).data('audio')||''); });
     $('#challengeAnswers').on('click','button',function(){
       const $list=$('#challengeAnswers'); if ($list.data('done')) return; $list.data('done',true);
       const data=activeChallengeData(),item=data.item,correct=Number($(this).data('index'))===item.options.indexOf(item.answer); $(this).addClass(correct?'correct':'wrong'); if (!correct) $list.find('[data-correct="true"]').addClass('correct'); $list.find('button').prop('disabled',true);
@@ -1094,8 +1406,45 @@
     });
     $('#nextChallenge').on('click',function(){ const data=activeChallengeData(); if (data.index>=data.deck.length-1) renderFiniteSummary('challenge'); else { practiceSession.challenge=data.index+1; renderChallenge(); } });
     $('#explainChallenge').on('click',async function(){ const item=activeChallengeData().item; if (!item) return; showLoading('#challengeAiFeedback','Mochi đang giải thích theo trình độ của bạn...'); $(this).prop('disabled',true); try { const data=await askGemini('explain',item.question,'Correct answer: '+item.answer+'. Base explanation: '+item.explanation+'. Topic: '+item.topic); showAiFeedback('#challengeAiFeedback',data,'writing'); } catch(error) { $('#challengeAiFeedback').removeClass('show'); toast(error.message||'Chưa thể lấy giải thích AI.','error'); } finally { $(this).prop('disabled',false); } });
+    $('#examBadgeGrid').on('click','.exam-badge',function(){ startExam(Number($(this).data('exam-index'))); });
+    $('#exitExam').on('click',function(){ if (confirm('Thoát đề thi? Kết quả chưa nộp sẽ không được lưu.')) abortExam(); });
+    $('#practice-exam').on('click','.exam-audio-button',function(){ speakDialogue($(this).data('audio')||''); });
+    $('#practice-exam').on('click','.exam-sample',function(){ const item=examSession.exam?.items?.[examSession.index]; if (item) speak(item.target||item.question); });
+    $('#practice-exam').on('click','.exam-options button',function(){
+      if (!examSession.active||examSession.answered) return;
+      const item=examSession.exam.items[examSession.index],$options=$('.exam-options button'),selected=Number($(this).data('index')),correct=String(item.options[selected])===String(item.answer);
+      $(this).addClass(correct?'correct':'wrong'); $options.filter('[data-correct="true"]').addClass('correct'); $options.prop('disabled',true); updateExerciseMastery(item,correct);
+      if (!correct) state.mistakes.unshift({type:EXAM_TYPE_LABELS[item.type]||item.type,wrong:item.options[selected]||'',right:item.answer,note:examSession.exam.title});
+      recordExamAnswer(correct?100:0,item.options[selected]||'',`<strong>${correct?'✓ Correct!':'Not quite.'}</strong><span>Correct answer: ${escapeHtml(item.answer||'')}</span>${item.explanation?`<small>${escapeHtml(item.explanation)}</small>`:''}`);
+    });
+    $('#practice-exam').on('click','.exam-record-btn',async function(){
+      if (examRecording) return stopExamRecording(false);
+      try { await startExamRecording(); } catch(error) { stopExamRecording(true); toast(error.message||'Không thể mở microphone. Hãy kiểm tra quyền truy cập.','error'); }
+    });
+    $('#practice-exam').on('click','#gradeExamSpeaking',async function(){
+      const item=examSession.exam?.items?.[examSession.index]; if (!item||examSession.answered) return;
+      const $button=$(this).prop('disabled',true).text('✦ Đang chấm...');
+      try {
+        const data=await askGemini('speaking',examTranscript,'Target sentence: '+item.target+'. The learner must say every word in the complete target sentence. Grade pronunciation, content accuracy and fluency strictly.',examAudio);
+        const transcriptCoverage=examTranscript?spokenContentCoverage(item.target,examTranscript):null,aiCoverage=Number(data.contentScore??data.accuracyScore??data.accuracy),coverage=Number.isFinite(aiCoverage)?Math.round(Math.max(0,Math.min(100,aiCoverage))):(transcriptCoverage===null?0:transcriptCoverage),raw=Math.max(0,Math.min(100,Number(data.score)||0)),pronunciation=Math.max(0,Math.min(100,Number(data.pronunciationScore)||raw)),score=Math.min(raw,pronunciation,coverage<SPEAKING_MIN_COVERAGE?79:100);
+        recordExamAnswer(score,examTranscript,`<strong>Điểm nói: ${Math.round(score)}/100</strong><span>Nội dung ${coverage}% · Phát âm ${Math.round(pronunciation)}/100 · Trôi chảy ${Math.round(Number(data.fluencyScore)||raw)}/100</span><small>${escapeHtml(aiText(data.improvements,'Hãy đọc đủ câu, rõ âm cuối và giữ nhịp tự nhiên.'))}</small>`);
+      } catch(error) { toast(error.message||'Gemini chưa thể chấm phần nói.','error'); }
+      finally { $button.prop('disabled',false).text('✦ Chấm phần nói'); }
+    });
+    $('#practice-exam').on('input','#examWritingInput',function(){ $('#examWritingCount').text(this.value.length); });
+    $('#practice-exam').on('click','#gradeExamWriting',async function(){
+      const item=examSession.exam?.items?.[examSession.index],text=$('#examWritingInput').val().trim(),wordCount=text?text.split(/\s+/).length:0; if (!item||examSession.answered) return;
+      if (wordCount<Number(item.minWords||20)) return toast('Hãy viết ít nhất '+(item.minWords||20)+' từ trước khi nộp.','error');
+      const $button=$(this).prop('disabled',true).text('✦ Đang chấm...');
+      try { const data=await askGemini('writing',text,'Timed exam writing task: '+(item.instruction||item.question)+'. Grade task completion, grammar, vocabulary and naturalness realistically.'); const score=Math.max(0,Math.min(100,Number(data.score)||0)); recordExamAnswer(score,text,`<strong>Điểm viết: ${Math.round(score)}/100</strong><span>${escapeHtml(aiText(data.explanation||data.improvements,'Bài viết đã được chấm theo độ đúng, đủ ý và tự nhiên.'))}</span>${data.corrected?`<small>Gợi ý: ${escapeHtml(data.corrected)}</small>`:''}`); }
+      catch(error) { toast(error.message||'Gemini chưa thể chấm phần viết.','error'); }
+      finally { $button.prop('disabled',false).text('✦ Nộp phần viết'); }
+    });
+    $('#nextExamQuestion').on('click',function(){ if (!examSession.active||!examSession.answered) return; if (examSession.index>=examSession.exam.items.length-1) finishExam(false); else { examSession.index++; renderExamQuestion(); } });
+    $('#practice-exam').on('click','.exam-back-bank',renderExamBank);
+    $('#practice-exam').on('click','.exam-retry',function(){ startExam(Number($(this).data('exam-index'))); });
     $(document).on('click','.session-retry',function(){
-      const type=String($(this).data('type')),wrong=(practiceSession[type+'Results']||[]).filter(result=>!result.correct).map(result=>result.itemIndex);
+      const type=String($(this).data('type')),wrong=(practiceSession[type+'Results']||[]).filter(result=>!result.correct).map(result=>({itemIndex:result.itemIndex,variantCycle:result.variantCycle||0}));
       if (wrong.length) startFiniteSession(type,wrong);
     });
     $(document).on('click','.session-restart',function(){ const type=String($(this).data('type')); if (type==='challenge') { practiceSession.aiChallengeDeck=null; practiceSession.challengeQueue=null; renderChallenge(true); } else startFiniteSession(type); });

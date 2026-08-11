@@ -33,12 +33,23 @@ function loadSpeakingHelpers() {
   return context;
 }
 
+function loadExamHelpers(curriculum) {
+  const start=app.indexOf('  function stableHash');
+  const end=app.indexOf('\n  function examResultKey',start);
+  assert(start>=0&&end>start,'Không tìm thấy exam bank helpers');
+  const context={CURRICULUM:curriculum,state:{learningGoal:'general',level:'A1',practiceOffsets:{}},practiceData:{A1:{}},practiceSession:{},$:{extend:function(){ return JSON.parse(JSON.stringify(arguments[arguments.length-1]||{})); }}};
+  context.currentGoalId=()=>context.state.learningGoal;
+  vm.runInNewContext(app.slice(start,end)+'\nthis.buildExamBank=buildExamBank;',context);
+  return context;
+}
+
 const roadmap=extract('roadmapData','\n  const practiceData');
 const practice=extract('practiceData','\n\n  function currentGoalId');
 const levels=['A1','A2','B1','B2'];
 const curriculumContext={window:{}};
 vm.runInNewContext(curriculumSource,curriculumContext);
 const curriculum=curriculumContext.window.FLUENTGO_CURRICULUM;
+const examHelpers=loadExamHelpers(curriculum);
 
 levels.forEach(level=>{
   assert(roadmap[level]&&roadmap[level].length>=8,level+' cần ít nhất 8 roadmap node');
@@ -69,11 +80,18 @@ Object.keys(curriculum.goals).forEach(goal=>levels.forEach(level=>{
   assert(curriculum.getRoadmap(goal,level).length===12,goal+' '+level+' cần đúng 12 chặng');
   assert(curriculum.getVocabulary(goal,level,'all').length>=24,goal+' '+level+' cần ít nhất 24 flashcard');
   ['listening','reading','speaking','writing'].forEach(type=>assert(curriculum.toPracticeDeck(goal,level,type,'all').length>=24,goal+' '+level+' cần ít nhất 24 bài '+type));
+  examHelpers.state.learningGoal=goal; examHelpers.state.level=level;
+  const exams=examHelpers.buildExamBank(level),requiredTypes=['listening','speaking','reading','writing','ordering','grammar','tense'];
+  assert(exams.length===20,goal+' '+level+' cần đúng 20 đề thi');
+  exams.forEach(exam=>{ assert(exam.items.length===15,exam.id+' cần đúng 15 câu'); requiredTypes.forEach(type=>assert(exam.items.some(item=>item.type===type),exam.id+' thiếu dạng '+type)); });
+  const displayed=exams.flatMap(exam=>exam.items.map(item=>item.type+'|'+(item.type==='speaking'?item.target:item.type==='writing'?item.instruction:item.question)));
+  const duplicate=displayed.find((value,index)=>displayed.indexOf(value)!==index);
+  assert(!duplicate,goal+' '+level+' còn trùng nội dung câu hỏi giữa 20 đề: '+duplicate);
 }));
 
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert(new Set(ids).size===ids.length,'HTML có ID bị trùng');
-['nextListening','nextReading','nextSpeaking','nextWriting','practiceLevelSelect','practiceGoalSelect','roadmapGoalSelect','roadmapUnitSelect','vocabularyTopicSelect','challengeTypeSelect','generateAiChallenge','nextChallenge','listeningSummary','readingSummary','speakingSummary','writingSummary','vocabularySummary','challengeSummary','challengePassage','listeningTranscript','settingLearningGoal','settingVoice','settingSpeechRate','previewVoice'].forEach(id=>assert(ids.includes(id),'Thiếu #'+id));
+['nextListening','nextReading','nextSpeaking','nextWriting','practiceLevelSelect','practiceGoalSelect','roadmapGoalSelect','roadmapUnitSelect','vocabularyTopicSelect','challengeTypeSelect','generateAiChallenge','nextChallenge','listeningSummary','readingSummary','speakingSummary','writingSummary','vocabularySummary','challengeSummary','challengePassage','listeningTranscript','settingLearningGoal','settingVoice','settingSpeechRate','previewVoice','examBadgeGrid','examPlayer','examTimer','examQuestionBody','examResult'].forEach(id=>assert(ids.includes(id),'Thiếu #'+id));
 assert(html.includes('curriculum-data.js'),'Frontend chưa nạp curriculum engine');
 assert(app.includes("bridgeCall('gemini'"),'Frontend chưa gọi Gemini qua Apps Script');
 assert(backend.includes('UrlFetchApp.fetch'),'Apps Script chưa có Gemini proxy');
@@ -84,19 +102,19 @@ assert(backend.includes("'explain'"),'Apps Script chưa hỗ trợ AI giải th�
 assert(backend.includes("'exercise'"),'Apps Script chưa hỗ trợ AI tạo bộ bài theo mục tiêu');
 assert(!app.includes('x-goog-api-key'),'Frontend vẫn chứa logic gửi Gemini key');
 assert(app.includes("renderFiniteSummary('vocabulary')"),'Flashcard chưa có điểm kết thúc');
-assert(app.includes("Math.min(12,source.length)"),'Flashcard chưa giới hạn phiên học đủ lớn và rõ ràng');
-assert(app.includes('filter(index=>!previousSet.has(index))'),'Flashcard phiên mới chưa ưu tiên thẻ chưa học ở phiên trước');
+assert(app.includes('vocabulary:12'),'Flashcard chưa giới hạn phiên học đủ lớn và rõ ràng');
+assert(app.includes('state.practiceOffsets[key]=offset+limit'),'Phiên luyện mới chưa chuyển sang dữ liệu chưa dùng');
 assert(app.includes('function startVocabularyQuiz'),'Flashcard chưa có bài kiểm tra sau phiên học');
 assert(app.includes('What does “${escapeHtml(item.card.word)}” mean?'),'Flashcard quiz chưa hỏi bằng tiếng Anh');
 assert(app.includes('wrong.length<3'),'Flashcard quiz chưa tạo đủ 4 đáp án');
 assert(app.includes("return renderFiniteSummary(type)"),'Nghe/đọc chưa có điểm kết thúc');
 assert(app.includes("renderFiniteSummary('challenge')"),'Practice Lab chưa có điểm kết thúc');
 assert(app.includes('updateExerciseMastery(item,correct)'),'Practice Lab chưa cập nhật năng lực theo từng bài');
-assert(app.includes('exerciseStrength(source[a])-exerciseStrength(source[b])'),'Practice Lab chưa ưu tiên nội dung yếu');
+assert(app.includes("buildPracticeQueue('challenge',source)"),'Practice Lab chưa chuyển qua bộ dữ liệu mới theo từng phiên');
 assert(app.includes("askGemini('exercise'"),'Practice Lab chưa thể tạo bộ bài mới bằng AI');
 assert(app.includes('English answer'),'Luyện nghe chưa hiển thị câu tiếng Anh sau khi chấm');
 assert(app.includes('function speakDialogue'),'Luyện nghe chưa tách giọng hội thoại');
-assert(app.includes("profile.gender==='female'?1.12:.9"),'Hai nhân vật chưa có cấu hình giọng nam/nữ khác nhau');
+assert(app.includes("female?1.2:.8")&&app.includes('const used=new Set(),voiceBySpeaker={}'),'Hai nhân vật chưa có cấu hình giọng nam/nữ tách biệt');
 assert(app.includes("state.voiceName=$('#settingVoice').val()"),'Settings chưa lưu giọng đọc toàn ứng dụng');
 assert(app.includes("state.speechRate=Number($('#settingSpeechRate').val())"),'Settings chưa lưu tốc độ đọc toàn ứng dụng');
 assert(app.includes("state.practiceTopic='all'"),'Mục đích học chưa reset chủ đề trên toàn ứng dụng');
@@ -113,6 +131,10 @@ assert(app.includes('const SPEAKING_MIN_COVERAGE = 100'),'Luyện nói chưa yê
 assert(app.includes("$('#nextSpeaking').addClass('hidden')"),'Luyện nói chưa khóa Next khi không pass');
 assert(backend.includes('contentScore=100 only'),'Prompt chấm nói chưa yêu cầu đủ toàn bộ nội dung');
 assert(backend.includes('pronunciationScore below 80'),'Prompt chấm nói chưa áp dụng ngưỡng phát âm 80');
+assert(app.includes('Array.from({length:20}')&&app.includes("add('tense')"),'Chưa có 20 đề thi chứa bài về các thì');
+assert(app.includes("add('dictation')")&&app.includes("add('speaking')")&&app.includes("add('writing')"),'Đề thi chưa bao phủ nghe, nói và viết');
+assert(app.includes('state.examResults[key]'),'Kết quả luyện đề chưa được lưu vào tiến độ');
+assert(app.includes('exam.durationMinutes*60'),'Đề thi chưa có đồng hồ theo thời lượng');
 
 const speakingHelpers=loadSpeakingHelpers();
 assert(speakingHelpers.spokenContentCoverage('I greet my neighbors every morning.','I greet my neighbors every morning.')===100,'Câu nói đầy đủ phải đạt coverage 100');

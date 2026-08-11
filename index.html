@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260811-8">
+  <link rel="stylesheet" href="styles.css?v=20260811-11">
 </head>
 <body>
   <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -221,6 +221,7 @@
               <button class="practice-tab" data-practice="writing"><span class="skill-icon mint">✎</span><span><strong>Luyện viết</strong><small>AI sửa ngữ pháp</small></span></button>
               <button class="practice-tab" data-practice="vocabulary"><span class="skill-icon yellow">Aa</span><span><strong>Từ vựng</strong><small>Flashcard thông minh</small></span></button>
               <button class="practice-tab" data-practice="challenge"><span class="skill-icon blue">✣</span><span><strong>Practice Lab</strong><small>English-first · 10 dạng</small></span></button>
+              <button class="practice-tab" data-practice="exam"><span class="skill-icon exam-icon">15</span><span><strong>Luyện đề</strong><small>20 đề · có bấm giờ</small></span></button>
               <button class="practice-tab" data-practice="chat"><span class="skill-icon pink">✦</span><span><strong>Chat cùng Mochi</strong><small>Hội thoại tự do</small></span></button>
             </div>
 
@@ -311,6 +312,24 @@
                 <div class="session-summary hidden" id="challengeSummary"></div>
               </section>
 
+              <section class="practice-pane exam-pane" id="practice-exam">
+                <div class="exam-bank-view" id="examBankView">
+                  <div class="exercise-head"><span class="exercise-label exam-label" id="examLevelLabel">LUYỆN ĐỀ · A1</span><span>20 đề · 15 câu/đề</span></div>
+                  <div class="exam-hero"><div><span class="section-kicker">MOCHI EXAM CENTER</span><h2>Chọn đề thi thử</h2><p>Mỗi đề có nghe, nói, đọc, viết, sắp xếp từ, ngữ pháp và các thì. Nội dung giữa các đề không trùng câu hỏi.</p></div><img src="assets/mochi.png" alt="Mochi giám thị"></div>
+                  <div class="exam-overview" id="examOverview"></div>
+                  <div class="exam-badge-grid" id="examBadgeGrid" aria-label="Danh sách 20 đề thi"></div>
+                  <section class="exam-history"><div class="panel-title"><h3>Kết quả gần đây</h3><span id="examHistoryCount">Chưa làm đề nào</span></div><div id="examHistoryList"></div></section>
+                </div>
+                <div class="exam-player hidden" id="examPlayer">
+                  <div class="exam-player-head"><button type="button" id="exitExam" aria-label="Thoát đề thi">×</button><div><span id="examTitle">Đề 01 · A1</span><div class="exam-progress-track"><i id="examProgressBar"></i></div></div><strong id="examTimer">25:00</strong></div>
+                  <div class="exam-question-meta"><span id="examQuestionType">LISTENING</span><b id="examQuestionNumber">Câu 1 / 15</b></div>
+                  <div class="exam-question-body" id="examQuestionBody"></div>
+                  <div class="exam-question-feedback" id="examQuestionFeedback"></div>
+                  <button class="primary-btn wide hidden" id="nextExamQuestion">Câu tiếp theo →</button>
+                </div>
+                <div class="exam-result hidden" id="examResult"></div>
+              </section>
+
               <section class="practice-pane" id="practice-chat">
                 <div class="conversation-setup" id="conversationSetup">
                   <div class="exercise-head"><span class="exercise-label pink-label">HỘI THOẠI AI · <b class="current-chat-level">A1</b></span><span class="online-dot">● Gemini sẵn sàng</span></div>
@@ -397,6 +416,6 @@
   <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
   <script src="app-config.js"></script>
   <script src="curriculum-data.js?v=20260811-3"></script>
-  <script src="app.js?v=20260811-7"></script>
+  <script src="app.js?v=20260811-11"></script>
 </body>
 </html>
