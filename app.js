@@ -37,6 +37,11 @@
   let selectedLessonAnswer = null;
   let activeRoadmapLesson = null;
   let recognition = null;
+  let speakingRecognitionCtor = null;
+  let speakingRecordingActive = false;
+  let speakingRecognitionShouldRun = false;
+  let speakingRecognitionRestartTimer = null;
+  let speakingTranscriptBase = '';
   let transcript = '';
   let speechRate = 1;
   let mediaRecorder = null;
@@ -52,6 +57,9 @@
   let selectedScenario = null;
   let aiVoiceEnabled = true;
   let chatRecognition = null;
+  let chatRecognitionShouldRun = false;
+  let chatRecognitionRestartTimer = null;
+  let chatDictationBase = '';
   const practiceSession = {level:'',listening:0,reading:0,speaking:0,writing:0,vocabulary:0,listeningQueue:null,readingQueue:null,vocabularyQueue:null,listeningResults:[],readingResults:[],vocabularyResults:[]};
   const conversation = { active:false,scenario:'',aiRole:'',userRole:'',first:'user',history:[],turns:0,messageSequence:0 };
 
@@ -240,6 +248,7 @@
   function routeTo(route) {
     const valid = ['home','learn','practice','review','profile'];
     route = valid.includes(route) ? route : 'home';
+    if (route!=='practice') stopSpeakingRecording(true);
     $('.view').removeClass('active'); $('#view-' + route).addClass('active');
     $('[data-route]').removeClass('active').filter(`[data-route="${route}"]`).addClass('active');
     try { history.replaceState(null, '', '#' + route); } catch (_) { location.hash = route; }
@@ -247,6 +256,7 @@
   }
 
   function switchPractice(type) {
+    if (type!=='speaking') stopSpeakingRecording(true);
     routeTo('practice');
     $('.practice-tab').removeClass('active').filter(`[data-practice="${type}"]`).addClass('active');
     $('.practice-pane').removeClass('active'); $('#practice-' + type).addClass('active');
@@ -328,7 +338,7 @@
 
   function renderSpeaking() {
     const {level,deck,index,item}=activePracticeData('speaking'); if (!item) return;
-    if (recognition) try { recognition.stop(); } catch (_) {} stopMediaCapture();
+    stopSpeakingRecording(true);
     transcript=''; recordedAudio=null; $('#speakingLevel').text('NÓI · '+level+' · AI COACH'); $('#speakingProgress').text('Câu '+(index+1)+' / '+deck.length);
     $('#speakingTarget').text('“'+item.target+'”'); $('#speakingMeaning').text(item.vi); $('#liveTranscript').text('Lời bạn nói sẽ xuất hiện tại đây...'); $('#recordLabel').text('Chạm để bắt đầu nói');
     $('#recordBtn').removeClass('recording'); $('#analyzeSpeech,#nextSpeaking').addClass('hidden'); $('#speechFeedback').removeClass('show').empty();
@@ -454,6 +464,7 @@
   }
 
   function showAuthGate(message) {
+    stopChatDictation();
     authUser=null; state=$.extend(true,{},defaults); conversation.active=false; conversation.history=[]; conversation.turns=0;
     $('#conversationRoom').addClass('hidden'); $('#conversationSetup').removeClass('hidden'); $('#chatMessages,#quickReplies').empty();
     $('#authGate').removeClass('hidden').attr('aria-hidden','false');
@@ -618,16 +629,78 @@
   function nextLesson() { currentLessonStep = Math.min(lessonSteps.length - 1, currentLessonStep + 1); selectedLessonAnswer = null; renderLesson(); }
 
   function setupRecognition() {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-    recognition = new SpeechRecognition(); recognition.lang = 'en-US'; recognition.interimResults = true; recognition.continuous = false;
-    recognition.onstart = () => { $('#recordBtn').addClass('recording'); $('#recordLabel').text('Đang nghe... hãy nói tự nhiên'); transcript = ''; };
-    recognition.onresult = e => {
-      transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-      $('#liveTranscript').text(transcript || 'Đang nghe...');
+    speakingRecognitionCtor=window.SpeechRecognition||window.webkitSpeechRecognition||null;
+  }
+
+  function startSpeakingRecognitionCycle() {
+    if (!speakingRecordingActive||!speakingRecognitionShouldRun||!speakingRecognitionCtor||recognition) return;
+    const instance=new speakingRecognitionCtor();
+    recognition=instance;
+    instance.lang='en-US';
+    instance.interimResults=true;
+    instance.continuous=true;
+    instance.maxAlternatives=1;
+    instance.onstart=()=>setSpeakingRecordState(true,'Đang ghi liên tục... nhấn Stop khi nói xong');
+    instance.onresult=event=>{
+      let finalText='',interimText='';
+      for (let i=0;i<event.results.length;i++) {
+        const part=String(event.results[i][0]?.transcript||'').trim();
+        if (!part) continue;
+        if (event.results[i].isFinal) finalText+=(finalText?' ':'')+part;
+        else interimText+=(interimText?' ':'')+part;
+      }
+      transcript=[speakingTranscriptBase,finalText,interimText].filter(Boolean).join(' ').replace(/\s+/g,' ').trim();
+      $('#liveTranscript').text(transcript||'Đang nghe... bạn có thể tạm dừng rồi nói tiếp.');
     };
-    recognition.onerror = e => { toast(e.error === 'not-allowed' ? 'Bạn chưa cấp quyền microphone.' : 'Không nghe rõ. Hãy thử lại nhé!', 'error'); };
-    recognition.onend = () => { stopMediaCapture(); $('#recordBtn').removeClass('recording'); $('#recordLabel').text(transcript ? 'Đã ghi nhận lời nói' : 'Đã ghi âm — Gemini sẽ nghe trực tiếp'); setTimeout(() => $('#analyzeSpeech').toggleClass('hidden', !(transcript || recordedAudio)), 180); };
+    instance.onerror=event=>{
+      const error=String(event.error||'');
+      if (error==='not-allowed'||error==='service-not-allowed') {
+        speakingRecognitionShouldRun=false;
+        $('#recordLabel').text('Đang ghi âm, nhưng chưa có quyền tạo transcript · nhấn Stop để dừng');
+      } else if (error==='audio-capture') {
+        toast('Không tìm thấy microphone.','error');
+        stopSpeakingRecording();
+      } else if (error!=='no-speech'&&error!=='aborted') {
+        $('#recordLabel').text('Đang ghi âm · Mochi đang kết nối lại nhận diện giọng nói');
+      }
+    };
+    instance.onend=()=>{
+      if (recognition===instance) recognition=null;
+      speakingTranscriptBase=transcript.trim();
+      if (!speakingRecordingActive||!speakingRecognitionShouldRun) return;
+      clearTimeout(speakingRecognitionRestartTimer);
+      speakingRecognitionRestartTimer=setTimeout(startSpeakingRecognitionCycle,180);
+    };
+    try { instance.start(); }
+    catch (_) {
+      if (recognition===instance) recognition=null;
+      if (speakingRecordingActive&&speakingRecognitionShouldRun) {
+        clearTimeout(speakingRecognitionRestartTimer);
+        speakingRecognitionRestartTimer=setTimeout(startSpeakingRecognitionCycle,350);
+      }
+    }
+  }
+
+  function stopSpeakingRecording(silent) {
+    speakingRecordingActive=false;
+    speakingRecognitionShouldRun=false;
+    clearTimeout(speakingRecognitionRestartTimer);
+    speakingRecognitionRestartTimer=null;
+    const instance=recognition;
+    recognition=null;
+    if (instance) try { instance.stop(); } catch (_) { try { instance.abort(); } catch (__) {} }
+    stopMediaCapture();
+    setSpeakingRecordState(false,silent?'':(transcript?'Đã ghi nhận lời nói · sẵn sàng nhờ Gemini nhận xét':'Đã ghi âm · sẵn sàng nhờ Gemini nhận xét'));
+    if (!silent) setTimeout(()=>$('#analyzeSpeech').toggleClass('hidden',!(transcript||recordedAudio)),220);
+  }
+
+  function setSpeakingRecordState(active,label) {
+    $('#recordBtn').toggleClass('recording',!!active).attr({
+      'aria-label':active?'Dừng ghi âm':'Bắt đầu ghi âm',
+      'title':active?'Đang ghi liên tục · Nhấn Stop để dừng':'Bắt đầu ghi âm',
+      'aria-pressed':String(!!active)
+    }).find('span').text(active?'■':'●');
+    if (label) $('#recordLabel').text(label);
   }
 
   async function startMediaCapture() {
@@ -643,7 +716,8 @@
         const reader = new FileReader();
         reader.onloadend = () => { recordedAudio = { audioData:String(reader.result).split(',')[1], audioMime:blob.type || 'audio/webm' }; $('#analyzeSpeech').removeClass('hidden'); };
         reader.readAsDataURL(blob);
-      }
+      } else if (blob.size >= 6 * 1024 * 1024) toast('Bản ghi quá dài để gửi âm thanh; Mochi sẽ nhận xét dựa trên transcript.','error');
+      if (transcript) $('#analyzeSpeech').removeClass('hidden');
     };
     mediaRecorder.start();
   }
@@ -725,12 +799,16 @@
     $('#playSpeakingSample').on('click', () => { const item=activePracticeData('speaking').item; if (item) speak(item.target,.75); });
     $('#readPassage').on('click', () => { const item=activePracticeData('reading').item; if (item) speak(item.passage,.78); });
     $('#recordBtn').on('click', async function(){
-      if ($(this).hasClass('recording')) { if (recognition) recognition.stop(); else { stopMediaCapture(); $(this).removeClass('recording'); } return; }
+      if (speakingRecordingActive) return stopSpeakingRecording();
       transcript = ''; recordedAudio = null; $('#liveTranscript').text('Đang khởi động microphone...');
       try {
         await startMediaCapture();
-        $(this).addClass('recording'); $('#recordLabel').text('Đang nghe... hãy nói tự nhiên');
-        if (recognition) recognition.start(); else { $('#liveTranscript').text('Đang ghi âm — nhấn micro lần nữa khi nói xong.'); }
+        speakingRecordingActive=true;
+        speakingRecognitionShouldRun=!!speakingRecognitionCtor;
+        speakingTranscriptBase='';
+        setSpeakingRecordState(true,'Đang ghi liên tục... nhấn Stop khi nói xong');
+        if (speakingRecognitionCtor) startSpeakingRecognitionCycle();
+        else $('#liveTranscript').text('Đang ghi âm — nhấn Stop khi nói xong. Gemini sẽ nghe file âm thanh.');
       } catch (_) { toast('Không thể mở microphone. Hãy kiểm tra quyền truy cập.', 'error'); }
     });
     $('#analyzeSpeech').on('click', async function(){
@@ -834,6 +912,7 @@
 
   function startConversation() {
     if (!selectedScenario || conversation.active) return;
+    stopChatDictation();
     conversation.active=true; conversation.scenario=selectedScenario.scenario; conversation.aiRole=selectedScenario.aiRole; conversation.userRole=selectedScenario.userRole; conversation.history=[]; conversation.turns=0; conversation.messageSequence=0;
     conversation.first=$('#speakerToggle button.active').data('first')||'user';
     $('.current-chat-level').text(state.level); $('#activeScenarioTitle').text(conversation.scenario);
@@ -846,6 +925,7 @@
   }
 
   function endConversation() {
+    stopChatDictation();
     if (!conversation.active) { $('#conversationRoom').addClass('hidden'); $('#conversationSetup').removeClass('hidden'); return; }
     const learnerTurns=conversation.history.filter(item=>item.role==='user').length;
     conversation.active=false; window.speechSynthesis?.cancel();
@@ -931,6 +1011,7 @@
 
   async function sendChat() {
     if (!conversation.active) return;
+    if (chatRecognitionShouldRun) return toast('Hãy nhấn nút Stop để kết thúc ghi âm trước khi gửi.','error');
     const input=$('#chatInput').val().trim(); if (!input) return;
     $('#chatInput').val(''); $('#quickReplies').empty(); const messageId=appendUserMessage(input);
     conversation.history.push({role:'user',text:input}); conversation.turns++; updateConversationTurns();
@@ -940,13 +1021,77 @@
   function startChatDictation() {
     const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
     if (!SpeechRecognition) return toast('Nhập giọng nói cần Chrome hoặc Edge.','error');
-    if (chatRecognition) { try { chatRecognition.stop(); } catch (_) {} return; }
-    chatRecognition=new SpeechRecognition(); chatRecognition.lang='en-US'; chatRecognition.interimResults=true;
-    chatRecognition.onstart=()=>$('#chatMic').addClass('listening').attr({'aria-label':'Dừng ghi âm','title':'Đang ghi âm · Nhấn để dừng','aria-pressed':'true'});
-    chatRecognition.onresult=event=>{ $('#chatInput').val(Array.from(event.results).map(result=>result[0].transcript).join('')); };
-    chatRecognition.onerror=()=>toast('Không nghe rõ. Hãy thử nói lại nhé!','error');
-    chatRecognition.onend=()=>{ $('#chatMic').removeClass('listening').attr({'aria-label':'Nhập bằng giọng nói','title':'Nhập bằng giọng nói','aria-pressed':'false'}); chatRecognition=null; $('#chatInput').focus(); };
-    try { chatRecognition.start(); } catch (_) { chatRecognition=null; $('#chatMic').removeClass('listening').attr('aria-pressed','false'); }
+    if (chatRecognitionShouldRun) return stopChatDictation();
+    chatRecognitionShouldRun=true;
+    chatDictationBase=$('#chatInput').val().trim();
+    setChatMicState(true);
+    startChatRecognitionCycle(SpeechRecognition);
+  }
+
+  function startChatRecognitionCycle(SpeechRecognition) {
+    if (!chatRecognitionShouldRun || !conversation.active || chatRecognition) return;
+    const instance=new SpeechRecognition();
+    chatRecognition=instance;
+    instance.lang='en-US';
+    instance.interimResults=true;
+    instance.continuous=true;
+    instance.maxAlternatives=1;
+    instance.onstart=()=>setChatMicState(true);
+    instance.onresult=event=>{
+      let finalText='',interimText='';
+      for (let i=0;i<event.results.length;i++) {
+        const part=String(event.results[i][0]?.transcript||'').trim();
+        if (!part) continue;
+        if (event.results[i].isFinal) finalText+=(finalText?' ':'')+part;
+        else interimText+=(interimText?' ':'')+part;
+      }
+      $('#chatInput').val([chatDictationBase,finalText,interimText].filter(Boolean).join(' ').replace(/\s+/g,' ').trim());
+    };
+    instance.onerror=event=>{
+      const error=String(event.error||'');
+      if (error==='not-allowed'||error==='service-not-allowed'||error==='audio-capture') {
+        chatRecognitionShouldRun=false;
+        setChatMicState(false);
+        toast(error==='audio-capture'?'Không tìm thấy microphone.':'Bạn chưa cấp quyền microphone.','error');
+      } else if (error!=='no-speech'&&error!=='aborted') {
+        toast('Kết nối nhận diện giọng nói bị gián đoạn, Mochi đang kết nối lại.','error');
+      }
+    };
+    instance.onend=()=>{
+      if (chatRecognition===instance) chatRecognition=null;
+      chatDictationBase=$('#chatInput').val().trim();
+      if (!chatRecognitionShouldRun) { setChatMicState(false); $('#chatInput').focus(); return; }
+      clearTimeout(chatRecognitionRestartTimer);
+      chatRecognitionRestartTimer=setTimeout(()=>startChatRecognitionCycle(SpeechRecognition),180);
+    };
+    try { instance.start(); }
+    catch (_) {
+      if (chatRecognition===instance) chatRecognition=null;
+      if (chatRecognitionShouldRun) {
+        clearTimeout(chatRecognitionRestartTimer);
+        chatRecognitionRestartTimer=setTimeout(()=>startChatRecognitionCycle(SpeechRecognition),350);
+      }
+    }
+  }
+
+  function stopChatDictation() {
+    chatRecognitionShouldRun=false;
+    clearTimeout(chatRecognitionRestartTimer);
+    chatRecognitionRestartTimer=null;
+    const instance=chatRecognition;
+    chatRecognition=null;
+    if (instance) try { instance.stop(); } catch (_) { try { instance.abort(); } catch (__) {} }
+    chatDictationBase=$('#chatInput').val().trim();
+    setChatMicState(false);
+    $('#chatInput').focus();
+  }
+
+  function setChatMicState(listening) {
+    $('#chatMic').toggleClass('listening',!!listening).attr({
+      'aria-label':listening?'Dừng ghi âm':'Nhập bằng giọng nói',
+      'title':listening?'Đang ghi liên tục · Nhấn Stop để dừng':'Nhập bằng giọng nói',
+      'aria-pressed':String(!!listening)
+    });
   }
 
   function updateFlashcard() {

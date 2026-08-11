@@ -234,13 +234,13 @@
 
               <section class="practice-pane" id="practice-speaking">
                 <div class="exercise-head"><span class="exercise-label coral-label" id="speakingLevel">NÓI · A1 · AI COACH</span><span id="speakingProgress">Câu 1 / 3</span></div>
-                <h2>Đọc câu này thành tiếng</h2><p>Nhấn micro và nói tự nhiên. Mochi sẽ nghe và góp ý cho bạn.</p>
+                <h2>Đọc câu này thành tiếng</h2><p>Nhấn micro và nói tự nhiên. Bản ghi chỉ dừng khi bạn nhấn nút Stop.</p>
                 <div class="sentence-card">
                   <button class="tiny-sound" id="playSpeakingSample">♫</button>
                   <div><small>CÂU MẪU</small><strong id="speakingTarget">“Hi, my name is An. Nice to meet you!”</strong><span id="speakingMeaning">Xin chào, mình tên An. Rất vui được gặp bạn!</span></div>
                 </div>
                 <div class="record-area">
-                  <button class="record-btn" id="recordBtn"><span>●</span></button>
+                  <button class="record-btn" id="recordBtn" aria-label="Bắt đầu ghi âm" aria-pressed="false" title="Bắt đầu ghi âm"><span>●</span></button>
                   <strong id="recordLabel">Chạm để bắt đầu nói</strong><small>Cho phép trình duyệt sử dụng microphone</small>
                   <div class="live-transcript" id="liveTranscript">Lời bạn nói sẽ xuất hiện tại đây...</div>
                 </div>
@@ -307,7 +307,7 @@
                   <div class="chat-box conversation-chat" id="chatMessages"></div>
                   <div class="quick-replies" id="quickReplies"></div>
                   <div class="chat-input conversation-input"><button id="chatMic" class="chat-mic" aria-label="Nhập bằng giọng nói" aria-pressed="false" title="Nhập bằng giọng nói"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6"></path></svg><span class="mic-ripple" aria-hidden="true"></span></button><input id="chatInput" autocomplete="off" maxlength="500" placeholder="Trả lời bằng tiếng Anh..."><button id="sendChat" aria-label="Gửi">➤</button></div>
-                  <p class="conversation-tip">Mochi sẽ sửa lỗi nhẹ nhàng sau mỗi câu và gợi ý cách trả lời tự nhiên hơn.</p>
+                  <p class="conversation-tip">Microphone sẽ ghi liên tục qua các khoảng nghỉ; nhấn icon Stop rồi gửi khi bạn nói xong.</p>
                 </div>
               </section>
             </div>
@@ -364,6 +364,6 @@
 
   <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
   <script src="app-config.js"></script>
-  <script src="app.js?v=20260810-7"></script>
+  <script src="app.js?v=20260811-2"></script>
 </body>
 </html>

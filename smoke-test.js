@@ -47,6 +47,14 @@ assert(backend.includes('normalizeGeminiPayload_'),'Apps Script chưa unwrap JSO
 assert(!app.includes('x-goog-api-key'),'Frontend vẫn chứa logic gửi Gemini key');
 assert(app.includes("renderFiniteSummary('vocabulary')"),'Flashcard chưa có điểm kết thúc');
 assert(app.includes("return renderFiniteSummary(type)"),'Nghe/đọc chưa có điểm kết thúc');
+assert(app.includes('instance.continuous=true'),'Chat microphone chưa bật nhận diện liên tục');
+assert(app.includes('chatRecognitionShouldRun'),'Chat microphone chưa giữ trạng thái cho tới khi user bấm Stop');
+assert(app.includes('startChatRecognitionCycle(SpeechRecognition),180'),'Chat microphone chưa tự nối lại khi trình duyệt kết thúc phiên');
+assert(app.includes('Hãy nhấn nút Stop'),'Chat vẫn có thể gửi khi microphone đang ghi');
+assert(app.includes('function startSpeakingRecognitionCycle'),'Luyện nói chưa có chu kỳ nhận diện liên tục');
+assert(app.includes('instance.continuous=true'),'Microphone chưa bật chế độ continuous');
+assert(app.includes('speakingRecognitionRestartTimer=setTimeout(startSpeakingRecognitionCycle,180)'),'Luyện nói chưa tự nối lại nhận diện');
+assert(app.includes('if (speakingRecordingActive) return stopSpeakingRecording()'),'Nút Luyện nói chưa dừng thủ công');
 
 const aiHelpers=loadAiHelpers();
 const nestedReply=JSON.stringify({reply:'Sure! Would you like that hot or iced?',suggestions:['Iced coffee, please.']});

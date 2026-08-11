@@ -34,6 +34,8 @@
 .conversation-input .chat-mic:hover:not(:disabled){background:#fff7f5}
 .conversation-input .chat-mic.listening{background:#fff4f1;animation:none}
 .conversation-input .chat-mic.listening svg{color:#f14f39;animation:micBreathe .75s ease-in-out infinite alternate}
+.conversation-input .chat-mic.listening svg{visibility:hidden;animation:none}
+.conversation-input .chat-mic.listening:after{content:"";position:absolute;z-index:3;width:11px;height:11px;border-radius:3px;background:#f14f39;box-shadow:0 0 0 4px rgba(241,79,57,.1)}
 .conversation-input .chat-mic.listening .mic-ripple{animation:micRipple 1.25s ease-out infinite}
 .conversation-input .chat-mic.listening:before{animation:micRipple 1.25s .42s ease-out infinite}
 .conversation-input .chat-mic:disabled{cursor:not-allowed;opacity:.55}
