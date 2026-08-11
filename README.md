@@ -8,8 +8,11 @@ Curriculum mới nằm trong `curriculum-data.js` và được tạo cố địn
 
 - 6 mục tiêu: giao tiếp cơ bản, lập trình viên, công sở, du lịch/định cư, học tập/du học, dịch vụ/bán hàng.
 - 4 trình độ A1–B2, mỗi cặp mục tiêu–trình độ có 12 chặng và mỗi chặng có 6 bài.
-- 288 chặng, 1.728 bài lộ trình và 5.760 bài luyện thuộc 10 dạng.
-- Flashcard lọc theo mục tiêu và 12 chủ đề, ưu tiên từ chưa nhớ và có điểm dừng cuối bộ.
+- 72 chủ đề và 144 cụm/câu mẫu được biên soạn theo mục tiêu; engine tạo 5.760 biến thể luyện tập thuộc 10 dạng. Con số biến thể không được xem là 5.760 bài biên soạn thủ công.
+- Flashcard theo phiên 12 thẻ từ kho 24 từ/mục tiêu–trình độ, ưu tiên chủ đề và từ chưa nhớ; phiên mới ưu tiên thẻ chưa xuất hiện ở phiên trước.
+- Settings lưu mục đích học, giọng tiếng Anh và tốc độ đọc để dùng thống nhất trong lộ trình, bài nghe, bài đọc, luyện nói, ôn lỗi và hội thoại AI.
+- Practice Lab ưu tiên câu người học còn yếu, hiển thị passage/audio đúng dạng bài và chỉ gọi Gemini khi người học chủ động yêu cầu tạo một bộ mới.
+- Nghe, đọc, nói, viết, flashcard và Practice Lab đều kết thúc bằng báo cáo phiên; không tự quay về câu đầu.
 - Kho bài tập tạo phiên 20 câu; chỉ gọi Gemini khi người học chủ động yêu cầu giải thích sâu.
 - Mục tiêu, chặng hiện tại, kết quả và lịch ôn được lưu trong state người dùng rồi đồng bộ như tiến độ hiện có.
 
@@ -150,7 +153,7 @@ styles.css                 Giao diện responsive
 app.js                     Bài tập, speech, state và Apps Script bridge
 app-config.js              Web App URL công khai của Apps Script
 google-apps-script.gs      Gemini proxy, cache config, tài khoản, session và đồng bộ Sheets
-curriculum-data.js         6 mục tiêu, 12 chặng/mục tiêu/trình độ và kho 5.760 bài
+curriculum-data.js         Content V2 English-first, 6 mục tiêu, guidebook và practice engine
 BA_ANALYSIS.md             Audit BA, yêu cầu và product backlog
 smoke-test.js              Kiểm tra dataset, Next flow và kiến trúc Gemini proxy
 assets/mochi.png           Mascot Mochi

@@ -8,10 +8,10 @@ Kho nội dung được tổ chức theo chuỗi `mục tiêu → trình độ �
 |---|---|
 | Mục tiêu học | 6 lựa chọn: giao tiếp, lập trình viên, công sở, du lịch/định cư, du học, dịch vụ/bán hàng |
 | Lộ trình | 12 chặng cho mỗi mục tiêu và mỗi A1–B2; 6 bài/chặng; cho phép mở mọi chặng và học vượt kế hoạch |
-| Quy mô | 288 chặng, 1.728 bài lộ trình, 5.760 bài luyện cố định |
+| Quy mô | 288 chặng, 1.728 node lộ trình; 72 chủ đề, 144 cụm/câu nền và 5.760 biến thể luyện tập. Không đánh đồng biến thể sinh theo schema với bài biên soạn thủ công |
 | Dạng bài | Nghe, đọc, điền từ, ngữ pháp, dịch, sắp xếp câu, ghép nghĩa, chính tả, nói, viết |
 | Flashcard | Tối thiểu 24 từ theo mỗi mục tiêu/trình độ; lọc 12 chủ đề; lịch ôn tách theo mục tiêu |
-| AI | Hội thoại, chấm nói, sửa viết và giải thích sâu theo yêu cầu; không dùng AI cho thao tác Next thông thường |
+| AI | Hội thoại, chấm nói, sửa viết, giải thích sâu và tạo bộ Practice Lab theo mục tiêu khi user yêu cầu; không dùng AI cho thao tác Next thông thường |
 | Đồng bộ | Mục tiêu và vị trí chặng nằm trong state người dùng, được lưu cục bộ và đồng bộ Google Sheets |
 
 Nguyên tắc sản phẩm: dữ liệu cốt lõi phải chạy offline, nhanh và dự đoán được; AI là lớp coach giúp phản hồi cá nhân hóa, không phải điều kiện để mở một bài học.

@@ -42,11 +42,20 @@ levels.forEach(level=>{
 assert(curriculum.stats.goals>=6,'Kho học cần ít nhất 6 mục tiêu');
 assert(curriculum.stats.units===288,'Lộ trình cần 12 chặng cho mỗi mục tiêu và trình độ');
 assert(curriculum.stats.lessons===1728,'Kho lộ trình cần 1.728 bài học');
-assert(curriculum.stats.exercises>=5000,'Kho bài tập phải có trên 5.000 dữ liệu');
+assert(curriculum.stats.exerciseVariants>=5000,'Practice engine phải tạo trên 5.000 biến thể');
+assert(curriculum.stats.curatedPhrases===144,'Nền nội dung phải có 144 câu trọng tâm được kiểm soát');
 assert(curriculum.stats.types>=10,'Kho bài tập cần ít nhất 10 dạng');
 assert(new Set(curriculum.exerciseBank.map(item=>item.id)).size===curriculum.exerciseBank.length,'Exercise ID phải duy nhất');
 assert(curriculum.exerciseBank.filter(item=>!['speaking','writing'].includes(item.type)).every(item=>Array.isArray(item.options)&&item.options.includes(item.answer)),'Mọi bài lựa chọn phải chứa đáp án đúng');
 assert(curriculum.getExercises('developer','A1','listening','all')[0].audio!==curriculum.getExercises('developer','B2','listening','all')[0].audio,'Nội dung phải tăng độ khó theo level');
+const vietnamese=/[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
+const englishFirstTypes=new Set(['listening','reading','cloze','grammar','ordering','dictation']);
+curriculum.exerciseBank.filter(item=>englishFirstTypes.has(item.type)).forEach(item=>{
+  assert(!vietnamese.test(item.question||''),item.id+' có câu hỏi tiếng Việt trong dạng English-first');
+  assert(!(item.options||[]).some(option=>vietnamese.test(option)),item.id+' có đáp án tiếng Việt trong dạng English-first');
+});
+curriculum.exerciseBank.filter(item=>item.type==='speaking').forEach(item=>assert(!vietnamese.test(item.question||''),item.id+' có hướng dẫn nói tiếng Việt'));
+curriculum.exerciseBank.filter(item=>item.type==='writing').forEach(item=>assert(!vietnamese.test(item.instruction||''),item.id+' có đề viết tiếng Việt'));
 Object.keys(curriculum.goals).forEach(goal=>levels.forEach(level=>{
   assert(curriculum.getRoadmap(goal,level).length===12,goal+' '+level+' cần đúng 12 chặng');
   assert(curriculum.getVocabulary(goal,level,'all').length>=24,goal+' '+level+' cần ít nhất 24 flashcard');
@@ -55,7 +64,7 @@ Object.keys(curriculum.goals).forEach(goal=>levels.forEach(level=>{
 
 const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(match=>match[1]);
 assert(new Set(ids).size===ids.length,'HTML có ID bị trùng');
-['nextListening','nextReading','nextSpeaking','nextWriting','practiceLevelSelect','practiceGoalSelect','roadmapGoalSelect','roadmapUnitSelect','vocabularyTopicSelect','challengeTypeSelect','nextChallenge','listeningSummary','readingSummary','vocabularySummary','listeningTranscript'].forEach(id=>assert(ids.includes(id),'Thiếu #'+id));
+['nextListening','nextReading','nextSpeaking','nextWriting','practiceLevelSelect','practiceGoalSelect','roadmapGoalSelect','roadmapUnitSelect','vocabularyTopicSelect','challengeTypeSelect','generateAiChallenge','nextChallenge','listeningSummary','readingSummary','speakingSummary','writingSummary','vocabularySummary','challengeSummary','challengePassage','listeningTranscript','settingLearningGoal','settingVoice','settingSpeechRate','previewVoice'].forEach(id=>assert(ids.includes(id),'Thiếu #'+id));
 assert(html.includes('curriculum-data.js'),'Frontend chưa nạp curriculum engine');
 assert(app.includes("bridgeCall('gemini'"),'Frontend chưa gọi Gemini qua Apps Script');
 assert(backend.includes('UrlFetchApp.fetch'),'Apps Script chưa có Gemini proxy');
@@ -63,9 +72,20 @@ assert(backend.includes('CONFIG_PROPERTY_KEY'),'Apps Script chưa cache config t
 assert(backend.includes('callGeminiWithRefresh_'),'Apps Script chưa refresh key khi lỗi xác thực');
 assert(backend.includes('normalizeGeminiPayload_'),'Apps Script chưa unwrap JSON nhiều lớp');
 assert(backend.includes("'explain'"),'Apps Script chưa hỗ trợ AI giải thích bài tập');
+assert(backend.includes("'exercise'"),'Apps Script chưa hỗ trợ AI tạo bộ bài theo mục tiêu');
 assert(!app.includes('x-goog-api-key'),'Frontend vẫn chứa logic gửi Gemini key');
 assert(app.includes("renderFiniteSummary('vocabulary')"),'Flashcard chưa có điểm kết thúc');
+assert(app.includes("Math.min(12,source.length)"),'Flashcard chưa giới hạn phiên học đủ lớn và rõ ràng');
+assert(app.includes('filter(index=>!previousSet.has(index))'),'Flashcard phiên mới chưa ưu tiên thẻ chưa học ở phiên trước');
 assert(app.includes("return renderFiniteSummary(type)"),'Nghe/đọc chưa có điểm kết thúc');
+assert(app.includes("renderFiniteSummary('challenge')"),'Practice Lab chưa có điểm kết thúc');
+assert(app.includes('updateExerciseMastery(item,correct)'),'Practice Lab chưa cập nhật năng lực theo từng bài');
+assert(app.includes('exerciseStrength(source[a])-exerciseStrength(source[b])'),'Practice Lab chưa ưu tiên nội dung yếu');
+assert(app.includes("askGemini('exercise'"),'Practice Lab chưa thể tạo bộ bài mới bằng AI');
+assert(app.includes('English answer'),'Luyện nghe chưa hiển thị câu tiếng Anh sau khi chấm');
+assert(app.includes("state.voiceName=$('#settingVoice').val()"),'Settings chưa lưu giọng đọc toàn ứng dụng');
+assert(app.includes("state.speechRate=Number($('#settingSpeechRate').val())"),'Settings chưa lưu tốc độ đọc toàn ứng dụng');
+assert(app.includes("state.practiceTopic='all'"),'Mục đích học chưa reset chủ đề trên toàn ứng dụng');
 assert(app.includes('instance.continuous=true'),'Chat microphone chưa bật nhận diện liên tục');
 assert(app.includes('chatRecognitionShouldRun'),'Chat microphone chưa giữ trạng thái cho tới khi user bấm Stop');
 assert(app.includes('startChatRecognitionCycle(SpeechRecognition),180'),'Chat microphone chưa tự nối lại khi trình duyệt kết thúc phiên');
@@ -80,4 +100,4 @@ const nestedReply=JSON.stringify({reply:'Sure! Would you like that hot or iced?'
 const normalized=aiHelpers.normalizeAiResponse({ok:true,reply:JSON.stringify(nestedReply)});
 assert(aiHelpers.aiText(normalized.reply,'')==='Sure! Would you like that hot or iced?','Chat vẫn hiển thị nguyên object JSON');
 
-console.log('Smoke test đạt: 6 mục tiêu, 288 chặng, 1.728 bài lộ trình, '+curriculum.stats.exercises+' bài tập, 10 dạng và Gemini proxy.');
+console.log('Smoke test đạt: Content V2 English-first, 6 mục tiêu, 288 chặng, 1.728 node, '+curriculum.stats.exerciseVariants+' biến thể, 10 dạng và Gemini proxy.');

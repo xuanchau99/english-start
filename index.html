@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css?v=20260810-5">
+  <link rel="stylesheet" href="styles.css?v=20260811-7">
 </head>
 <body>
   <section class="auth-gate" id="authGate" aria-labelledby="authTitle">
@@ -192,6 +192,9 @@
             <label><span>Chặng đang học</span><select id="roadmapUnitSelect" aria-label="Chọn chặng lộ trình"></select></label>
             <div class="unit-navigation"><button id="previousRoadmapUnit" class="secondary-btn">← Chặng trước</button><button id="nextRoadmapUnit" class="primary-btn">Chặng tiếp →</button></div>
           </div>
+          <section class="unit-guidebook" id="unitGuidebook">
+            <div class="guidebook-icon">▤</div><div><span>UNIT GUIDEBOOK</span><h3 id="guidebookTitle">What you will learn</h3><div id="guidebookOutcomes"></div></div><div class="guidebook-phrases" id="guidebookPhrases"></div>
+          </section>
           <section class="roadmap-card">
             <div class="unit-header">
               <div class="unit-number">01</div>
@@ -207,7 +210,7 @@
 
         <section class="view" id="view-practice">
           <div class="page-title-row">
-            <div><span class="section-kicker">PHÒNG LUYỆN TẬP · <b id="practiceLevelLabel">A1</b></span><h1>Bạn muốn luyện gì?</h1><p>Mỗi trình độ có nhiều bộ bài. Hoàn thành một câu để mở câu tiếp theo.</p></div>
+            <div><span class="section-kicker">PHÒNG LUYỆN TẬP · <b id="practiceLevelLabel">A1</b> · CONTENT V2</span><h1>Bạn muốn luyện gì?</h1><p>Câu hỏi và đáp án dùng tiếng Anh; tiếng Việt chỉ xuất hiện ở phần hỗ trợ nghĩa và dạng bài dịch.</p></div>
             <div class="practice-head-actions"><select id="practiceGoalSelect" aria-label="Chọn mục tiêu luyện tập"></select><select id="practiceLevelSelect" aria-label="Chọn trình độ luyện tập"><option>A1</option><option>A2</option><option>B1</option><option>B2</option></select><div class="ai-status" id="aiStatus"><i></i><span>Đang kiểm tra Gemini AI...</span></div></div>
           </div>
           <div class="practice-layout">
@@ -217,7 +220,7 @@
               <button class="practice-tab" data-practice="reading"><span class="skill-icon blue">▥</span><span><strong>Luyện đọc</strong><small>Đọc hiểu ngữ cảnh</small></span></button>
               <button class="practice-tab" data-practice="writing"><span class="skill-icon mint">✎</span><span><strong>Luyện viết</strong><small>AI sửa ngữ pháp</small></span></button>
               <button class="practice-tab" data-practice="vocabulary"><span class="skill-icon yellow">Aa</span><span><strong>Từ vựng</strong><small>Flashcard thông minh</small></span></button>
-              <button class="practice-tab" data-practice="challenge"><span class="skill-icon blue">✣</span><span><strong>Kho bài tập</strong><small>10 dạng · 5.760 bài</small></span></button>
+              <button class="practice-tab" data-practice="challenge"><span class="skill-icon blue">✣</span><span><strong>Practice Lab</strong><small>English-first · 10 dạng</small></span></button>
               <button class="practice-tab" data-practice="chat"><span class="skill-icon pink">✦</span><span><strong>Chat cùng Mochi</strong><small>Hội thoại tự do</small></span></button>
             </div>
 
@@ -253,6 +256,7 @@
                 <button class="primary-btn wide hidden" id="analyzeSpeech">✦ Nhờ Gemini nhận xét</button>
                 <div class="ai-feedback-card" id="speechFeedback"></div>
                 <button class="secondary-btn wide practice-next hidden" id="nextSpeaking">Luyện câu tiếp theo →</button>
+                <div class="session-summary hidden" id="speakingSummary"></div>
               </section>
 
               <section class="practice-pane" id="practice-reading">
@@ -277,12 +281,13 @@
                 <button class="primary-btn wide" id="checkWriting">✦ Nhờ Gemini sửa bài</button>
                 <div class="ai-feedback-card" id="writingFeedback"></div>
                 <button class="secondary-btn wide practice-next hidden" id="nextWriting">Đề tiếp theo →</button>
+                <div class="session-summary hidden" id="writingSummary"></div>
               </section>
 
               <section class="practice-pane" id="practice-vocabulary">
                 <div class="exercise-head"><span class="exercise-label yellow-label" id="vocabularyLevel">TỪ VỰNG · A1</span><span id="flashCount">1 / 6</span></div>
                 <h2>Flashcard theo mục tiêu của bạn</h2><p>Chọn chủ đề, học từ trong ngữ cảnh và ôn lại theo mức độ ghi nhớ.</p>
-                <div class="deck-filters"><label><span>Mục đích học</span><select id="vocabularyGoalSelect"></select></label><label><span>Chủ đề</span><select id="vocabularyTopicSelect"></select></label></div>
+                <div class="deck-filters"><label><span>Mục đích học</span><select id="vocabularyGoalSelect"></select></label><label><span>Chủ đề ưu tiên</span><select id="vocabularyTopicSelect"></select></label></div>
                 <div class="flashcard" id="flashcard" tabindex="0" role="button" aria-label="Lật thẻ từ">
                   <div class="flash-inner"><div class="flash-front"><span>👋</span><strong id="flashWord">greet</strong><small>/ɡriːt/ · verb</small><p>Tap to reveal</p></div><div class="flash-back"><span>GREET</span><strong id="flashMeaning">chào hỏi</strong><p id="flashExample">She greeted me with a smile.</p><small>Cô ấy mỉm cười chào tôi.</small></div></div>
                 </div>
@@ -293,15 +298,17 @@
               <section class="practice-pane" id="practice-challenge">
                 <div class="exercise-head"><span class="exercise-label blue-label" id="challengeLevel">KHO BÀI TẬP · A1</span><span id="challengeProgress">Câu 1 / 20</span></div>
                 <h2>Luyện đa dạng theo tình huống</h2><p>Mỗi chặng phối hợp nghe, đọc, điền từ, ngữ pháp, dịch, sắp xếp câu, ghép nghĩa và chính tả.</p>
-                <div class="challenge-toolbar"><select id="challengeTypeSelect" aria-label="Chọn dạng bài"></select><select id="challengeTopicSelect" aria-label="Chọn chủ đề"></select></div>
+                <div class="challenge-toolbar"><select id="challengeTypeSelect" aria-label="Chọn dạng bài"></select><select id="challengeTopicSelect" aria-label="Chọn chủ đề"></select><button class="secondary-btn" id="generateAiChallenge">✦ AI tạo bộ mới</button></div>
                 <div class="challenge-type" id="challengeTypeLabel">ĐIỀN TỪ</div>
                 <button class="audio-card challenge-audio hidden" id="playChallengeAudio"><span>▶</span><strong>Nghe câu hỏi</strong></button>
+                <div class="reading-card hidden" id="challengePassage"></div>
                 <h3 class="question-title" id="challengeQuestion"></h3>
                 <div class="answer-list" id="challengeAnswers"></div>
                 <div class="exercise-feedback" id="challengeFeedback"></div>
                 <button class="secondary-btn hidden" id="explainChallenge">✦ Nhờ AI giải thích sâu hơn</button>
                 <div class="ai-feedback-card" id="challengeAiFeedback"></div>
                 <button class="primary-btn wide hidden" id="nextChallenge">Câu tiếp theo →</button>
+                <div class="session-summary hidden" id="challengeSummary"></div>
               </section>
 
               <section class="practice-pane" id="practice-chat">
@@ -371,7 +378,10 @@
       <div class="settings-head"><div><span class="section-kicker">CÁ NHÂN HÓA</span><h2 id="settingsTitle">Cài đặt học tập</h2></div><button class="close-settings">×</button></div>
       <label>Họ tên<input id="settingName" type="text" value="An Nguyễn"></label>
       <label>Trình độ<select id="settingLevel"><option>A1 · Người mới bắt đầu</option><option>A2 · Cơ bản</option><option>B1 · Trung cấp</option><option>B2 · Trên trung cấp</option></select></label>
-      <label>Mục đích học<select id="settingLearningGoal"></select></label>
+      <label>Mục đích học áp dụng toàn ứng dụng<select id="settingLearningGoal"></select></label>
+      <label>Giọng đọc tiếng Anh<select id="settingVoice"><option value="">Giọng mặc định của thiết bị</option></select></label>
+      <label>Tốc độ giọng đọc<select id="settingSpeechRate"><option value="0.7">Chậm · 0.7×</option><option value="0.9">Tự nhiên · 0.9×</option><option value="1.05">Nhanh · 1.05×</option></select></label>
+      <button class="secondary-btn wide" id="previewVoice" type="button">▶ Nghe thử giọng đọc</button>
       <label>Mục tiêu mỗi ngày<select id="settingGoal"><option value="10">10 phút · Nhẹ nhàng</option><option value="15" selected>15 phút · Đều đặn</option><option value="25">25 phút · Quyết tâm</option><option value="40">40 phút · Chuyên sâu</option></select></label>
       <div class="settings-note"><span>⚙️</span><p><strong>Cấu hình do chủ ứng dụng thiết lập</strong><br>Gemini được gọi bảo mật qua Apps Script; API key không được gửi tới trình duyệt.</p></div>
       <button class="primary-btn wide" id="saveSettings">Lưu thay đổi</button>
@@ -386,7 +396,7 @@
 
   <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
   <script src="app-config.js"></script>
-  <script src="curriculum-data.js?v=20260811-1"></script>
-  <script src="app.js?v=20260811-3"></script>
+  <script src="curriculum-data.js?v=20260811-3"></script>
+  <script src="app.js?v=20260811-6"></script>
 </body>
 </html>
