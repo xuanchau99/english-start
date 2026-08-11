@@ -355,6 +355,7 @@ function promptFor_(mode,input,context,level) {
     JSON.stringify(String(input||'').slice(0,5000))+'. Context: '+JSON.stringify(String(context||'').slice(0,2500))+'.';
   if (mode==='speaking') return shared+' Listen to attached audio when present. Evaluate intelligibility, accuracy, rhythm, stress and sounds. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"English","pronunciation":"Vietnamese tip"}.';
   if (mode==='writing') return shared+' Correct grammar, word choice, organization and naturalness while preserving meaning. Return {"score":0-100,"title":"Vietnamese","strengths":["Vietnamese"],"improvements":["Vietnamese"],"corrected":"complete corrected English","explanation":"Vietnamese"}.';
+  if (mode==='explain') return shared+' Explain why the supplied answer is correct and why common alternatives are wrong. Adapt to the learner level, give one memorable rule and one new example. Return {"score":100,"title":"Hiểu sâu đáp án","strengths":["Điểm người học cần ghi nhớ bằng tiếng Việt"],"improvements":["Lỗi dễ nhầm bằng tiếng Việt"],"corrected":"One short correct English example","explanation":"Concise Vietnamese explanation"}.';
   return shared+' Roleplay according to Context using simple English. If the input is an instruction to begin the roleplay, set score to null and review to null. Otherwise evaluate the learner sentence. Return {"reply":"1-2 short English sentences continuing the roleplay","correction":"short optional Vietnamese correction","suggestions":["short English reply 1","short English reply 2","short English reply 3"],"score":0-100,"review":{"grammar":"concise Vietnamese feedback","spelling":"concise Vietnamese feedback","naturalness":"concise Vietnamese feedback","pronunciation":"Vietnamese stress or sound tip","better_version":"natural corrected English sentence"}}.';
 }
 
@@ -379,7 +380,7 @@ function isGeminiCredentialError_(error) {
 
 function callGemini_(payload,config) {
   const mode=String(payload.mode||'');
-  if (['speaking','writing','chat'].indexOf(mode)<0) throw new Error('Chế độ AI không hợp lệ.');
+  if (['speaking','writing','chat','explain'].indexOf(mode)<0) throw new Error('Chế độ AI không hợp lệ.');
   const parts=[{text:promptFor_(mode,payload.input,payload.context,payload.level)}];
   if (mode==='speaking' && payload.audioData) {
     if (String(payload.audioData).length>7500000) throw new Error('Đoạn ghi âm quá lớn. Hãy ghi âm ngắn hơn.');

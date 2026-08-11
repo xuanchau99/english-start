@@ -1,5 +1,21 @@
 # FluentGo — Phân tích Business Analyst và kế hoạch sản phẩm
 
+## Bản cập nhật: học theo mục tiêu và kho nội dung dài hạn
+
+Kho nội dung được tổ chức theo chuỗi `mục tiêu → trình độ → chặng → chủ đề → dạng bài`.
+
+| Hạng mục | Thiết kế đã triển khai |
+|---|---|
+| Mục tiêu học | 6 lựa chọn: giao tiếp, lập trình viên, công sở, du lịch/định cư, du học, dịch vụ/bán hàng |
+| Lộ trình | 12 chặng cho mỗi mục tiêu và mỗi A1–B2; 6 bài/chặng; cho phép mở mọi chặng và học vượt kế hoạch |
+| Quy mô | 288 chặng, 1.728 bài lộ trình, 5.760 bài luyện cố định |
+| Dạng bài | Nghe, đọc, điền từ, ngữ pháp, dịch, sắp xếp câu, ghép nghĩa, chính tả, nói, viết |
+| Flashcard | Tối thiểu 24 từ theo mỗi mục tiêu/trình độ; lọc 12 chủ đề; lịch ôn tách theo mục tiêu |
+| AI | Hội thoại, chấm nói, sửa viết và giải thích sâu theo yêu cầu; không dùng AI cho thao tác Next thông thường |
+| Đồng bộ | Mục tiêu và vị trí chặng nằm trong state người dùng, được lưu cục bộ và đồng bộ Google Sheets |
+
+Nguyên tắc sản phẩm: dữ liệu cốt lõi phải chạy offline, nhanh và dự đoán được; AI là lớp coach giúp phản hồi cá nhân hóa, không phải điều kiện để mở một bài học.
+
 ## 1. Mục tiêu sản phẩm
 
 FluentGo là web app học tiếng Anh mobile-first cho người Việt từ A1 đến B2. Giá trị cốt lõi:
@@ -89,26 +105,25 @@ FluentGo là web app học tiếng Anh mobile-first cho người Việt từ A1 
 
 ### Lộ trình
 
-1. User chọn level.
-2. Hệ thống lấy node đầu tiên chưa hoàn thành làm `current`.
-3. Node tương lai bị khóa; node hoàn thành có thể mở lại để ôn.
-4. Khi nhận thưởng, lesson ID được thêm vào `completedLessons`.
-5. Node kế tiếp mở ngay, không kiểm tra giới hạn theo ngày.
-6. XP, phút học và progress được lưu local rồi debounce lên Google Sheets.
+1. User chọn mục tiêu, level và một trong 12 chặng.
+2. Hệ thống đánh dấu bài đầu tiên chưa hoàn thành là `current`; các bài khác vẫn mở để học vượt.
+3. Khi nhận thưởng, lesson ID gồm mục tiêu, level, chặng và bài được thêm vào `completedLessons`.
+4. Nút chặng trước/sau cho phép đi xuyên suốt lộ trình, không kiểm tra giới hạn theo ngày.
+5. XP, phút học, mục tiêu và vị trí chặng được lưu local rồi debounce lên Google Sheets.
 
 ### Luyện nghe/đọc
 
-1. Hệ thống lấy bộ bài theo level hiện tại.
+1. Hệ thống lấy bộ bài theo mục tiêu, level và chủ đề hiện tại.
 2. User chọn một đáp án; danh sách khóa để tránh chấm hai lần.
 3. Hiển thị đúng/sai, đáp án đúng và giải thích.
 4. Ghi `practiceStats`, lỗi sai và XP.
-5. Hiện nút Next; hết deck thì quay vòng và báo hoàn thành một vòng.
+5. Hiện nút Next; hết deck thì dừng ở màn hình kết quả và cho phép chủ động học lại.
 
 ### Luyện nói/viết
 
-1. Hệ thống lấy target/prompt theo level.
+1. Hệ thống lấy target/prompt theo mục tiêu, level và chủ đề.
 2. User ghi âm hoặc viết nội dung.
-3. Browser gọi Gemini trực tiếp và nhận JSON review.
+3. Browser gọi Apps Script bridge; Apps Script xác thực session, quota rồi proxy sang Gemini.
 4. UI hiển thị điểm, sửa lỗi và gợi ý.
 5. Ghi XP, số bài và lỗi viết; mở bài tiếp theo.
 

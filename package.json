@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "Ứng dụng luyện tiếng Anh mobile-first với Gemini AI",
-  "scripts": { "start": "node server.js", "check": "node --check app-config.js && node --check server.js && node --check app.js && node smoke-test.js" },
+  "scripts": { "start": "node server.js", "check": "node --check app-config.js && node --check curriculum-data.js && node --check server.js && node --check app.js && node smoke-test.js" },
   "engines": { "node": ">=14.0.0" }
 }

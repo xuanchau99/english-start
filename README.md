@@ -2,6 +2,17 @@
 
 FluentGo là web app HTML/CSS/JavaScript/jQuery chạy trên GitHub Pages. Gemini được gọi qua Apps Script; API key chỉ nằm trong Google Sheet và bản cache Script Properties, không được gửi xuống trình duyệt.
 
+## Kho học theo mục tiêu
+
+Curriculum mới nằm trong `curriculum-data.js` và được tạo cố định ngay trên thiết bị, vì vậy chuyển câu, chặng hoặc flashcard không tạo request Apps Script:
+
+- 6 mục tiêu: giao tiếp cơ bản, lập trình viên, công sở, du lịch/định cư, học tập/du học, dịch vụ/bán hàng.
+- 4 trình độ A1–B2, mỗi cặp mục tiêu–trình độ có 12 chặng và mỗi chặng có 6 bài.
+- 288 chặng, 1.728 bài lộ trình và 5.760 bài luyện thuộc 10 dạng.
+- Flashcard lọc theo mục tiêu và 12 chủ đề, ưu tiên từ chưa nhớ và có điểm dừng cuối bộ.
+- Kho bài tập tạo phiên 20 câu; chỉ gọi Gemini khi người học chủ động yêu cầu giải thích sâu.
+- Mục tiêu, chặng hiện tại, kết quả và lịch ôn được lưu trong state người dùng rồi đồng bộ như tiến độ hiện có.
+
 ## Kiến trúc bảo mật
 
 ```text
@@ -139,6 +150,7 @@ styles.css                 Giao diện responsive
 app.js                     Bài tập, speech, state và Apps Script bridge
 app-config.js              Web App URL công khai của Apps Script
 google-apps-script.gs      Gemini proxy, cache config, tài khoản, session và đồng bộ Sheets
+curriculum-data.js         6 mục tiêu, 12 chặng/mục tiêu/trình độ và kho 5.760 bài
 BA_ANALYSIS.md             Audit BA, yêu cầu và product backlog
 smoke-test.js              Kiểm tra dataset, Next flow và kiến trúc Gemini proxy
 assets/mochi.png           Mascot Mochi
