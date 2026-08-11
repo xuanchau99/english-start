@@ -10,6 +10,9 @@ Curriculum mới nằm trong `curriculum-data.js` và được tạo cố địn
 - 4 trình độ A1–B2, mỗi cặp mục tiêu–trình độ có 12 chặng và mỗi chặng có 6 bài.
 - 72 chủ đề và 144 cụm/câu mẫu được biên soạn theo mục tiêu; engine tạo 5.760 biến thể luyện tập thuộc 10 dạng. Con số biến thể không được xem là 5.760 bài biên soạn thủ công.
 - Flashcard theo phiên 12 thẻ từ kho 24 từ/mục tiêu–trình độ, ưu tiên chủ đề và từ chưa nhớ; phiên mới ưu tiên thẻ chưa xuất hiện ở phiên trước.
+- Sau phiên Flashcard có bài kiểm tra `What does ... mean?` với 4 đáp án nghĩa tiếng Việt và bảng điểm riêng.
+- Listening hội thoại dùng voice nam/nữ riêng theo speaker khi thiết bị có voice tiếng Anh phù hợp; nếu chỉ có một voice, pitch vẫn được tách để phân biệt nhân vật.
+- Speaking chỉ mở câu tiếp theo khi người học nói đủ toàn bộ câu mẫu và đạt ít nhất 80 điểm phát âm.
 - Settings lưu mục đích học, giọng tiếng Anh và tốc độ đọc để dùng thống nhất trong lộ trình, bài nghe, bài đọc, luyện nói, ôn lỗi và hội thoại AI.
 - Practice Lab ưu tiên câu người học còn yếu, hiển thị passage/audio đúng dạng bài và chỉ gọi Gemini khi người học chủ động yêu cầu tạo một bộ mới.
 - Nghe, đọc, nói, viết, flashcard và Practice Lab đều kết thúc bằng báo cáo phiên; không tự quay về câu đầu.

@@ -24,6 +24,15 @@ function loadAiHelpers() {
   return context;
 }
 
+function loadSpeakingHelpers() {
+  const start=app.indexOf('  function spokenContentCoverage');
+  const end=app.indexOf('\n  function toast',start);
+  assert(start>=0&&end>start,'Không tìm thấy bộ kiểm tra độ đầy đủ câu nói');
+  const context={};
+  vm.runInNewContext(app.slice(start,end)+'\nthis.spokenContentCoverage=spokenContentCoverage;',context);
+  return context;
+}
+
 const roadmap=extract('roadmapData','\n  const practiceData');
 const practice=extract('practiceData','\n\n  function currentGoalId');
 const levels=['A1','A2','B1','B2'];
@@ -77,12 +86,17 @@ assert(!app.includes('x-goog-api-key'),'Frontend vẫn chứa logic gửi Gemini
 assert(app.includes("renderFiniteSummary('vocabulary')"),'Flashcard chưa có điểm kết thúc');
 assert(app.includes("Math.min(12,source.length)"),'Flashcard chưa giới hạn phiên học đủ lớn và rõ ràng');
 assert(app.includes('filter(index=>!previousSet.has(index))'),'Flashcard phiên mới chưa ưu tiên thẻ chưa học ở phiên trước');
+assert(app.includes('function startVocabularyQuiz'),'Flashcard chưa có bài kiểm tra sau phiên học');
+assert(app.includes('What does “${escapeHtml(item.card.word)}” mean?'),'Flashcard quiz chưa hỏi bằng tiếng Anh');
+assert(app.includes('wrong.length<3'),'Flashcard quiz chưa tạo đủ 4 đáp án');
 assert(app.includes("return renderFiniteSummary(type)"),'Nghe/đọc chưa có điểm kết thúc');
 assert(app.includes("renderFiniteSummary('challenge')"),'Practice Lab chưa có điểm kết thúc');
 assert(app.includes('updateExerciseMastery(item,correct)'),'Practice Lab chưa cập nhật năng lực theo từng bài');
 assert(app.includes('exerciseStrength(source[a])-exerciseStrength(source[b])'),'Practice Lab chưa ưu tiên nội dung yếu');
 assert(app.includes("askGemini('exercise'"),'Practice Lab chưa thể tạo bộ bài mới bằng AI');
 assert(app.includes('English answer'),'Luyện nghe chưa hiển thị câu tiếng Anh sau khi chấm');
+assert(app.includes('function speakDialogue'),'Luyện nghe chưa tách giọng hội thoại');
+assert(app.includes("profile.gender==='female'?1.12:.9"),'Hai nhân vật chưa có cấu hình giọng nam/nữ khác nhau');
 assert(app.includes("state.voiceName=$('#settingVoice').val()"),'Settings chưa lưu giọng đọc toàn ứng dụng');
 assert(app.includes("state.speechRate=Number($('#settingSpeechRate').val())"),'Settings chưa lưu tốc độ đọc toàn ứng dụng');
 assert(app.includes("state.practiceTopic='all'"),'Mục đích học chưa reset chủ đề trên toàn ứng dụng');
@@ -94,6 +108,15 @@ assert(app.includes('function startSpeakingRecognitionCycle'),'Luyện nói chư
 assert(app.includes('instance.continuous=true'),'Microphone chưa bật chế độ continuous');
 assert(app.includes('speakingRecognitionRestartTimer=setTimeout(startSpeakingRecognitionCycle,180)'),'Luyện nói chưa tự nối lại nhận diện');
 assert(app.includes('if (speakingRecordingActive) return stopSpeakingRecording()'),'Nút Luyện nói chưa dừng thủ công');
+assert(app.includes('const SPEAKING_PASS_SCORE = 80'),'Luyện nói chưa đặt ngưỡng pass 80');
+assert(app.includes('const SPEAKING_MIN_COVERAGE = 100'),'Luyện nói chưa yêu cầu đủ toàn bộ câu mẫu');
+assert(app.includes("$('#nextSpeaking').addClass('hidden')"),'Luyện nói chưa khóa Next khi không pass');
+assert(backend.includes('contentScore=100 only'),'Prompt chấm nói chưa yêu cầu đủ toàn bộ nội dung');
+assert(backend.includes('pronunciationScore below 80'),'Prompt chấm nói chưa áp dụng ngưỡng phát âm 80');
+
+const speakingHelpers=loadSpeakingHelpers();
+assert(speakingHelpers.spokenContentCoverage('I greet my neighbors every morning.','I greet my neighbors every morning.')===100,'Câu nói đầy đủ phải đạt coverage 100');
+assert(speakingHelpers.spokenContentCoverage('I greet my neighbors every morning.','I read my neighbor every morning.')<100,'Câu nói sai hoặc thiếu từ không được đạt coverage 100');
 
 const aiHelpers=loadAiHelpers();
 const nestedReply=JSON.stringify({reply:'Sure! Would you like that hot or iced?',suggestions:['Iced coffee, please.']});
