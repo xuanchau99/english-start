@@ -8,6 +8,7 @@ assert(!app.includes('^AIza'), 'Frontend không được ép Gemini key phải b
 const html=fs.readFileSync('index.html','utf8');
 const backend=fs.readFileSync('google-apps-script.gs','utf8');
 const css=fs.readFileSync('styles.css','utf8');
+assert(html.includes('styles.css?v=20260812-2'),'Stylesheet chưa được đổi version để phá cache giao diện cũ');
 
 function assert(condition,message) { if (!condition) throw new Error(message); }
 function extract(name,nextMarker) {
