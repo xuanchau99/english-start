@@ -199,6 +199,28 @@ def main():
 
             report.run("Global learner settings", settings_global)
 
+            def account_activity_stats():
+                page.locator('.sidebar [data-route="profile"]').click()
+                expect(page.locator("#view-profile")).to_have_class(re.compile(r"active"))
+                expect(page.locator("#profileVisitDays")).to_be_visible()
+                visit_days = int(page.locator("#profileVisitDays").get_attribute("data-visit-days") or "0")
+                assert visit_days >= 1
+                before = int(page.locator("#profileTotalTime").get_attribute("data-total-seconds") or "0")
+                page.mouse.move(720, 480)
+                page.wait_for_timeout(11000)
+                after = int(page.locator("#profileTotalTime").get_attribute("data-total-seconds") or "0")
+                assert after > before
+                expect(page.locator("#profileLastVisit")).not_to_have_text("Chưa ghi nhận")
+                page.screenshot(path=str(ARTIFACTS / "02b-account-activity.png"), full_page=True)
+                page.set_viewport_size({"width": 390, "height": 844})
+                expect(page.locator(".access-stat-grid")).to_be_visible()
+                assert page.locator(".access-stat-grid > div").count() == 3
+                page.screenshot(path=str(ARTIFACTS / "02c-account-activity-mobile.png"), full_page=True)
+                page.set_viewport_size({"width": 1440, "height": 920})
+                return f"{visit_days} visit day(s), active seconds increased from {before} to {after}"
+
+            report.run("Account activity statistics", account_activity_stats)
+
             def roadmap_lesson():
                 page.locator('.sidebar [data-route="learn"]').click()
                 expect(page.locator("#view-learn")).to_have_class(re.compile(r"active"))

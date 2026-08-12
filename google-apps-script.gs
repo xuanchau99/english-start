@@ -13,7 +13,8 @@ const CONFIG_PROPERTY_KEY = 'FLUENTGO_CONFIG_SNAPSHOT_V1';
 const CONFIG_CACHE_SECONDS = 21600;
 const PROGRESS_HEADERS = [
   'userId','name','level','xp','streak','longestStreak','minutesWeek',
-  'dailyGoal','completedToday','completedLessons','wordsLearned','lastActive','syncedAt','rawJson'
+  'dailyGoal','completedToday','completedLessons','wordsLearned','lastActive','syncedAt','rawJson',
+  'visitDays','totalAccessSeconds','totalAccessHours'
 ];
 const USER_HEADERS = ['userId','email','displayName','passwordSalt','passwordHash','createdAt','lastLogin','status','username'];
 const SESSION_HEADERS = ['tokenHash','userId','createdAt','expiresAt','status'];
@@ -501,11 +502,14 @@ function saveProgress_(data) {
     const rows = sheet.getDataRange().getValues();
     let rowIndex = -1;
     for (let i=1; i<rows.length; i++) if (String(rows[i][0]) === String(data.userId)) { rowIndex=i+1; break; }
+    const visitDates=Array.isArray(data.visitDates)?data.visitDates.filter(function(value,index,values){return value&&values.indexOf(value)===index;}):[];
+    const totalAccessSeconds=Math.max(0,Math.round(Number(data.totalActiveSeconds)||0));
     const row = [
       data.userId,data.name||'',data.level||'A1',Number(data.xp)||0,Number(data.streak)||0,
       Number(data.longestStreak)||0,Number(data.minutesWeek)||0,Number(data.dailyGoal)||15,
       JSON.stringify(data.completedToday||[]),JSON.stringify(data.completedLessons||[]),
-      Number(data.wordsLearned)||0,data.lastActive||'',data.syncedAt||new Date().toISOString(),JSON.stringify(data)
+      Number(data.wordsLearned)||0,data.lastActive||'',data.syncedAt||new Date().toISOString(),JSON.stringify(data),
+      visitDates.length,totalAccessSeconds,Math.round(totalAccessSeconds/36)/100
     ];
     if (rowIndex>0) sheet.getRange(rowIndex,1,1,row.length).setValues([row]); else sheet.appendRow(row);
     cache.put(dedupeKey,fingerprint,21600);
@@ -523,6 +527,9 @@ function getProgressSheet_() {
     sheet.getRange(1,1,1,PROGRESS_HEADERS.length).setValues([PROGRESS_HEADERS]);
     sheet.getRange(1,1,1,PROGRESS_HEADERS.length).setFontWeight('bold').setBackground('#6454ed').setFontColor('#ffffff');
     sheet.setFrozenRows(1);
+  } else {
+    const headers=sheet.getRange(1,1,1,Math.max(sheet.getLastColumn(),PROGRESS_HEADERS.length)).getValues()[0];
+    PROGRESS_HEADERS.forEach(function(header,index){ if (headers.indexOf(header)<0) sheet.getRange(1,index+1).setValue(header); });
   }
   return sheet;
 }

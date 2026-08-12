@@ -10,13 +10,14 @@
   const SPEAKING_PASS_SCORE = 80;
   const SPEAKING_MIN_COVERAGE = 100;
   const todayKey = () => new Date().toISOString().slice(0, 10);
+  const localDayKey = (date) => { const value=date||new Date(); return [value.getFullYear(),String(value.getMonth()+1).padStart(2,'0'),String(value.getDate()).padStart(2,'0')].join('-'); };
   const defaults = {
     userId: '', username:'', name: 'Người học', email:'', level: 'A1', dailyGoal: 15,
     learningGoal:'general', roadmapUnit:0, practiceTopic:'all', vocabularyTopic:'all', challengeTopic:'all', challengeType:'all', voiceName:'', speechRate:0.9,
     xp: 1240, streak: 7, longestStreak: 12, minutesWeek: 78,
     lastActive: todayKey(), lastCompletedDay: '', completedToday: ['warmup'],
     completedLessons: ['A1-0','A1-1','A1-2','A1-3','A1-4'], lessonProgress: { daily: 35 },
-    wordsLearned: 24, vocabularyReview:{}, exerciseMastery:{}, practiceOffsets:{}, examResults:{}, practiceStats:{listening:{done:0,correct:0},reading:{done:0,correct:0},speaking:{done:0},writing:{done:0}}, mistakes: [
+    wordsLearned: 24, visitDates:[], visitDays:0, totalActiveSeconds:0, vocabularyReview:{}, exerciseMastery:{}, practiceOffsets:{}, examResults:{}, practiceStats:{listening:{done:0,correct:0},reading:{done:0,correct:0},speaking:{done:0},writing:{done:0}}, mistakes: [
       { type: 'Ngữ pháp', wrong: 'I am live in Hanoi.', right: 'I live in Hanoi.', note: 'Không dùng “am” trước động từ thường.' },
       { type: 'Từ vựng', wrong: 'Nice to see you.', right: 'Nice to meet you.', note: 'Dùng “meet” khi gặp lần đầu.' },
       { type: 'Phát âm', wrong: '/nɪs/', right: '/naɪs/', note: 'Âm /aɪ/ kéo nhẹ trong “nice”.' }
@@ -57,6 +58,12 @@
   let syncInFlight = false;
   let syncPending = false;
   let lastSyncedFingerprint = '';
+  let activityTimer = null;
+  let activityLastTick = Date.now();
+  let activityLastInteraction = Date.now();
+  let activityCounting = false;
+  let activityUnsavedSeconds = 0;
+  let activitySyncSeconds = 0;
   let aiRequestInFlight = false;
   let lastAiRequestAt = 0;
   let selectedScenario = null;
@@ -156,6 +163,64 @@
     if (sync && serverStatus.sheets) scheduleProgressSync();
   }
 
+  function formatActiveTime(seconds) {
+    const total=Math.max(0,Math.floor(Number(seconds)||0)),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60);
+    return hours+' giờ '+minutes+' phút';
+  }
+
+  function renderActivityStats() {
+    const dates=Array.isArray(state.visitDates)?state.visitDates:[];
+    state.visitDays=new Set(dates).size;
+    $('#profileVisitDays').text(formatNumber(state.visitDays)).attr('data-visit-days',state.visitDays);
+    $('#profileTotalTime').text(formatActiveTime(state.totalActiveSeconds)).attr('data-total-seconds',Math.floor(Number(state.totalActiveSeconds)||0));
+    $('#profileLastVisit').text(dates.length?dates.slice().sort().pop().split('-').reverse().join('/'):'Chưa ghi nhận');
+  }
+
+  function persistActivity(sync) {
+    if (!authUser||!state.userId) return;
+    state.updatedAt=new Date().toISOString();
+    localStorage.setItem(USER_STORAGE_PREFIX+state.userId,JSON.stringify(state));
+    renderActivityStats();
+    if (sync&&serverStatus.sheets) scheduleProgressSync(1200);
+  }
+
+  function activityIsEligible() {
+    return !!authUser&&document.visibilityState==='visible'&&(Date.now()-activityLastInteraction)<300000;
+  }
+
+  function tickActiveTime(forceSave) {
+    const now=Date.now(),elapsed=Math.max(0,(now-activityLastTick)/1000); activityLastTick=now;
+    if (activityCounting&&authUser&&state.userId) {
+      const counted=Math.min(elapsed,30); state.totalActiveSeconds=Math.max(0,Number(state.totalActiveSeconds)||0)+counted; activityUnsavedSeconds+=counted; activitySyncSeconds+=counted;
+    }
+    activityCounting=activityIsEligible();
+    renderActivityStats();
+    if (forceSave||activityUnsavedSeconds>=60) { const shouldSync=activitySyncSeconds>=60; persistActivity(shouldSync); activityUnsavedSeconds=0; if (shouldSync) activitySyncSeconds=0; }
+  }
+
+  function markUserActive() {
+    const wasCounting=activityCounting; activityLastInteraction=Date.now(); activityCounting=activityIsEligible(); if (!wasCounting&&activityCounting) activityLastTick=Date.now();
+  }
+
+  function startActivityTracking() {
+    clearInterval(activityTimer); activityLastTick=Date.now(); activityLastInteraction=Date.now(); activityCounting=true; activityUnsavedSeconds=0; activitySyncSeconds=0;
+    const today=localDayKey(); state.visitDates=Array.isArray(state.visitDates)?[...new Set(state.visitDates.filter(Boolean))]:[];
+    if (!state.visitDates.includes(today)) state.visitDates.push(today);
+    state.visitDates=state.visitDates.slice(-730); state.visitDays=state.visitDates.length; persistActivity(false);
+    activityTimer=setInterval(()=>tickActiveTime(false),10000);
+  }
+
+  function stopActivityTracking() {
+    if (activityTimer||activityCounting) tickActiveTime(true);
+    clearInterval(activityTimer); activityTimer=null; activityCounting=false;
+  }
+
+  function bindActivityTracking() {
+    ['pointerdown','keydown','touchstart','scroll'].forEach(type=>document.addEventListener(type,markUserActive,{passive:true}));
+    document.addEventListener('visibilitychange',()=>{ tickActiveTime(true); if (document.visibilityState==='visible') markUserActive(); });
+    window.addEventListener('beforeunload',()=>tickActiveTime(true));
+  }
+
   function firstName() { return (state.name || 'Bạn').trim().split(/\s+/).pop(); }
   function formatNumber(n) { return Number(n).toLocaleString('vi-VN'); }
   function renderState() {
@@ -168,6 +233,7 @@
     $('.current-chat-level').text(state.level);
     $('#practiceLevelLabel').text(state.level); $('#practiceLevelSelect').val(state.level);
     $('#profileDailyGoal').text(state.dailyGoal+' phút'); $('#profileLearningGoal').text(currentGoal().name); $('#profileRoadmapPosition').text('Chặng '+(Number(state.roadmapUnit||0)+1)+' / 12');
+    renderActivityStats();
     const currentUnit=CURRICULUM?.getRoadmap(currentGoalId(),state.level)?.[Math.min(11,Math.max(0,Number(state.roadmapUnit)||0))];
     $('#heroGoalCopy').text('Dành '+state.dailyGoal+' phút cho mục tiêu '+currentGoal().name.toLowerCase()+'. Mochi đã chọn chặng phù hợp cho bạn.');
     if (currentUnit) { $('#dailyLessonTitle').text(currentUnit.title); $('#dailyLessonCopy').text(currentUnit.description); }
@@ -879,7 +945,7 @@
       selected=localTime>remoteTime ? local : remote;
     }
     const merged=$.extend(true,{},defaults,selected);
-    ['completedToday','completedLessons','week','mistakes'].forEach(key=>{ if (Array.isArray(selected[key])) merged[key]=selected[key].slice(); });
+    ['completedToday','completedLessons','week','mistakes','visitDates'].forEach(key=>{ if (Array.isArray(selected[key])) merged[key]=selected[key].slice(); });
     if ((merged.completedLessons||[]).some(value=>typeof value==='number')) merged.completedLessons=merged.completedLessons.map(value=>typeof value==='number'?'A1-'+Math.max(0,value-1):String(value));
     merged.practiceStats=$.extend(true,{},defaults.practiceStats,merged.practiceStats||{});
     return merged;
@@ -891,6 +957,7 @@
     state=chooseProgress(authUser.userId,result.progress,isNewAccount);
     state.userId=authUser.userId; state.username=authUser.username||''; state.name=authUser.name; state.email=authUser.email;
     if (state.lastActive!==todayKey()) state.completedToday=[];
+    startActivityTracking();
     localStorage.setItem(USER_STORAGE_PREFIX+state.userId,JSON.stringify(state));
     resetGoalDrivenSessions(); renderState(); populateTopicSelect('#vocabularyTopicSelect',state.vocabularyTopic||'all'); populateTopicSelect('#challengeTopicSelect',state.challengeTopic||'all'); renderRoadmap(state.level); updateFlashcard(); renderPractice($('.practice-tab.active').data('practice')||'listening');
     $('#authGate').addClass('hidden').attr('aria-hidden','true'); clearAuthMessage();
@@ -899,6 +966,7 @@
   }
 
   function showAuthGate(message) {
+    stopActivityTracking();
     stopChatDictation();
     authUser=null; state=$.extend(true,{},defaults); conversation.active=false; conversation.history=[]; conversation.turns=0;
     $('#conversationRoom').addClass('hidden'); $('#conversationSetup').removeClass('hidden'); $('#chatMessages,#quickReplies').empty();
@@ -1790,7 +1858,7 @@
     }
     document.documentElement.setAttribute('data-content-version',CURRICULUM.version||'v2');
     if (state.lastActive !== todayKey()) state.completedToday=[];
-    renderState(); populateTopicSelect('#vocabularyTopicSelect',state.vocabularyTopic||'all'); populateTopicSelect('#challengeTopicSelect',state.challengeTopic||'all'); renderRoadmap(state.level); updateFlashcard(); renderPractice('listening'); setupRecognition(); bindEvents(); populateVoiceSettings();
+    renderState(); populateTopicSelect('#vocabularyTopicSelect',state.vocabularyTopic||'all'); populateTopicSelect('#challengeTopicSelect',state.challengeTopic||'all'); renderRoadmap(state.level); updateFlashcard(); renderPractice('listening'); setupRecognition(); bindEvents(); bindActivityTracking(); populateVoiceSettings();
     if ('speechSynthesis' in window) speechSynthesis.addEventListener?.('voiceschanged',populateVoiceSettings);
     await getStatus();
     const route=location.hash.replace('#',''); routeTo(route || 'home');

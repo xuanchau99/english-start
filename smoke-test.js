@@ -144,6 +144,11 @@ assert(app.includes("type:'write-check'")&&app.includes("type:'flashcard'"),'Bà
 assert(!lessonBuilder.includes('unit.exercises'),'Bài lộ trình vẫn dùng lại nguyên câu hỏi của Practice');
 assert(app.includes('state.checkpointAttempts[key]'),'Checkpoint chưa tạo bộ mới theo lần vào');
 assert(css.includes('.next-unit>button{display:inline-flex!important'),'Nút Mở chặng tiếp vẫn bị ẩn trên mobile');
+['profileVisitDays','profileTotalTime','profileLastVisit'].forEach(id=>assert(html.includes('id="'+id+'"'),'Hồ sơ thiếu thống kê #'+id));
+assert(app.includes('function startActivityTracking'),'Chưa khởi tạo bộ đếm thời gian theo user');
+assert(app.includes("document.visibilityState==='visible'")&&app.includes('300000'),'Bộ đếm chưa loại thời gian tab ẩn hoặc không hoạt động');
+assert(app.includes('state.visitDates.includes(today)'),'Một ngày truy cập có thể bị tính lặp');
+assert(backend.includes("'visitDays','totalAccessSeconds','totalAccessHours'"),'Google Sheets thiếu cột thống kê truy cập theo user');
 
 const speakingHelpers=loadSpeakingHelpers();
 assert(speakingHelpers.spokenContentCoverage('I greet my neighbors every morning.','I greet my neighbors every morning.')===100,'Câu nói đầy đủ phải đạt coverage 100');
