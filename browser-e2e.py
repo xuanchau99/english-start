@@ -220,6 +220,12 @@ def main():
                         page.locator(".lesson-options button").first.click()
                         page.locator(".lesson-check").click()
                         page.locator(".lesson-next").click()
+                    elif visible(page.locator(".lesson-writing")):
+                        page.locator(".lesson-writing").fill("I use this lesson in a clear and useful English situation every day.")
+                        page.locator(".lesson-writing-done").click()
+                    elif visible(page.locator(".lesson-flashcard")):
+                        page.locator(".lesson-flashcard").click()
+                        page.locator(".lesson-next").click()
                     elif visible(page.locator(".lesson-next")):
                         page.locator(".lesson-next").click()
                     else:
@@ -229,6 +235,63 @@ def main():
                 return "winding map, unit navigation and complete lesson flow"
 
             report.run("Roadmap and lesson", roadmap_lesson)
+
+            def roadmap_checkpoint_mobile():
+                page.locator('.sidebar [data-route="learn"]').click()
+                page.locator("#roadmapUnitSelect").select_option("0")
+                page.set_viewport_size({"width": 390, "height": 844})
+                expect(page.locator("#openNextUnit")).to_be_visible()
+                page.locator("#openNextUnit").click()
+                expect(page.locator("#roadmapUnitSelect")).to_have_value("1")
+                page.screenshot(path=str(ARTIFACTS / "03b-mobile-next-stage.png"), full_page=True)
+
+                page.set_viewport_size({"width": 1440, "height": 920})
+                page.locator("#roadmapUnitSelect").select_option("0")
+                page.locator('.map-node[data-index="5"]').click()
+                expect(page.locator("#lessonModal")).to_have_class(re.compile(r"open"))
+                expect(page.locator("#lessonStepLabel")).to_have_text("1 / 17")
+                page.locator(".lesson-next").click()
+                first_signature = page.locator("#lessonContent").inner_text()
+                covered = set()
+
+                for question_index in range(15):
+                    expect(page.locator("#lessonStepLabel")).to_have_text(f"{question_index + 2} / 17")
+                    if visible(page.locator(".lesson-audio")):
+                        covered.add("listening")
+                    if visible(page.locator(".lesson-passage")):
+                        covered.add("reading")
+                    if visible(page.locator(".lesson-options button")):
+                        if "Flashcard" in page.locator("#lessonContent").inner_text() or "Word in context" in page.locator("#lessonContent").inner_text():
+                            covered.add("flashcard")
+                        wrong = page.locator('.lesson-options button[data-correct="false"]').first
+                        expect(wrong).to_be_visible()
+                        wrong.click()
+                        page.locator(".lesson-check").click()
+                        page.locator(".lesson-next").click()
+                    elif visible(page.locator(".lesson-short-answer")):
+                        covered.add("writing")
+                        page.locator(".lesson-short-answer").fill("definitelywrong")
+                        page.locator(".lesson-write-check").click()
+                        page.locator(".lesson-next").click()
+                    elif visible(page.locator(".lesson-speak-done")):
+                        covered.add("speaking")
+                        page.locator(".lesson-speak-done").click()
+                    else:
+                        raise AssertionError(f"Checkpoint question {question_index + 1} has no actionable control")
+
+                assert covered == {"listening", "reading", "flashcard", "writing", "speaking"}
+                expect(page.locator("#lessonStepLabel")).to_have_text("17 / 17")
+                expect(page.locator(".lesson-retry-checkpoint")).to_be_visible()
+                expect(page.locator("#lessonContent")).to_contain_text("13%")
+                page.locator(".lesson-retry-checkpoint").click()
+                page.locator(".lesson-next").click()
+                second_signature = page.locator("#lessonContent").inner_text()
+                assert second_signature != first_signature
+                page.screenshot(path=str(ARTIFACTS / "03c-checkpoint-fresh-set.png"), full_page=True)
+                page.locator(".close-modal").click()
+                return "mobile next-stage control and fresh 15-question mixed checkpoint"
+
+            report.run("Roadmap rich checkpoint and mobile", roadmap_checkpoint_mobile)
 
             def open_practice(skill):
                 page.locator('.sidebar [data-route="practice"]').click()

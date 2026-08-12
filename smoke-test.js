@@ -7,6 +7,7 @@ const curriculumSource=fs.readFileSync('curriculum-data.js','utf8');
 assert(!app.includes('^AIza'), 'Frontend không được ép Gemini key phải bắt đầu bằng AIza');
 const html=fs.readFileSync('index.html','utf8');
 const backend=fs.readFileSync('google-apps-script.gs','utf8');
+const css=fs.readFileSync('styles.css','utf8');
 
 function assert(condition,message) { if (!condition) throw new Error(message); }
 function extract(name,nextMarker) {
@@ -135,6 +136,14 @@ assert(app.includes('Array.from({length:20}')&&app.includes("add('tense')"),'Ch�
 assert(app.includes("add('dictation')")&&app.includes("add('speaking')")&&app.includes("add('writing')"),'Đề thi chưa bao phủ nghe, nói và viết');
 assert(app.includes('state.examResults[key]'),'Kết quả luyện đề chưa được lưu vào tiến độ');
 assert(app.includes('exam.durationMinutes*60'),'Đề thi chưa có đồng hồ theo thời lượng');
+
+const lessonBuilder=app.slice(app.indexOf('  function buildLessonSteps'),app.indexOf('\n  function openLesson'));
+assert(app.includes('function buildCheckpointSteps'),'Lộ trình chưa có checkpoint riêng cho từng chặng');
+assert(app.includes('lessonCheckpointScore/15'),'Checkpoint cuối chặng chưa chấm đủ 15 câu');
+assert(app.includes("type:'write-check'")&&app.includes("type:'flashcard'"),'Bài học chưa trộn đủ viết và flashcard');
+assert(!lessonBuilder.includes('unit.exercises'),'Bài lộ trình vẫn dùng lại nguyên câu hỏi của Practice');
+assert(app.includes('state.checkpointAttempts[key]'),'Checkpoint chưa tạo bộ mới theo lần vào');
+assert(css.includes('.next-unit>button{display:inline-flex!important'),'Nút Mở chặng tiếp vẫn bị ẩn trên mobile');
 
 const speakingHelpers=loadSpeakingHelpers();
 assert(speakingHelpers.spokenContentCoverage('I greet my neighbors every morning.','I greet my neighbors every morning.')===100,'Câu nói đầy đủ phải đạt coverage 100');

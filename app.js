@@ -1034,21 +1034,60 @@
   }
 
   let lessonSteps=[];
+  let lessonCheckpoint=false,lessonCheckpointScore=0,lessonCheckpointAnswered=0;
+
+  function lessonOptions(correct,distractors,seed) {
+    const unique=[correct].concat(distractors||[]).filter((value,index,values)=>value&&values.indexOf(value)===index).slice(0,4);
+    const order=seededIndexes(unique.length,seed); return order.map(index=>unique[index]);
+  }
+
+  function dedicatedLessonContent(level,unit,unitIndex,lessonIndex,attempt) {
+    const all=CURRICULUM.getVocabulary(currentGoalId(),level,'all'),offset=(unitIndex*2+lessonIndex*3+attempt*5)%all.length;
+    const cards=Array.from({length:6},(_,index)=>all[(offset+index)%all.length]),names=['Noah','Olivia','Ethan','Ava','Lucas','Sophia'],speakerA=names[(unitIndex+attempt)%names.length],speakerB=names[(unitIndex+attempt+3)%names.length];
+    const option=(correct,values,seed)=>lessonOptions(correct,values,stableHash(currentGoalId()+'|'+level+'|'+unitIndex+'|'+lessonIndex+'|'+attempt+'|'+seed));
+    const choice=(type,title,question,correct,distractors,extra,seed)=>{ const options=option(correct,distractors,seed); return Object.assign({type:'choice',skill:type,emoji:{listening:'🎧',reading:'📖',vocabulary:'🧠',grammar:'🧩',writing:'✍️'}[type]||'✅',title,question,options,correct:options.indexOf(correct),explanation:'Review the clue in this lesson context, then say the complete English answer aloud.'},extra||{}); };
+    const dialogue=`${speakerA}: I am preparing for ${unit.englishTitle.toLowerCase()}. ${cards[0].example}\n${speakerB}: That is useful. ${cards[1].example}\n${speakerA}: Great, I will write down the next step.`;
+    const passage=`${speakerB} is practicing ${unit.englishTitle.toLowerCase()} in a new situation. ${cards[2].example} Then ${speakerB} uses “${cards[3].word}” to make the message clearer. Before finishing, ${speakerB} checks the result and explains the next step.`;
+    const flash=card=>({type:'flashcard',skill:'vocabulary',emoji:card.icon,title:'Learn a word in context',word:card.word,phonetic:card.phonetic,meaning:card.meaning,example:card.example,vi:card.vi});
+    const speak=card=>({type:'speak',skill:'speaking',emoji:'🎤',title:'Say it in your own voice',copy:'Listen once, then say the complete sentence with clear stress.',question:card.example});
+    const write=(card,second)=>({type:'write',skill:'writing',emoji:'✍️',title:'Write a useful response',prompt:`Write ${level==='A1'?'2–3 sentences':'a connected response'} about ${unit.englishTitle.toLowerCase()}. Use “${card.word}”${second?' and “'+second.word+'”':''}.`,minWords:{A1:8,A2:15,B1:28,B2:40}[level]||8});
+    return {cards,dialogue,passage,choice,flash,speak,write,option};
+  }
+
+  function buildCheckpointSteps(level,unit,unitIndex,attempt) {
+    const bank=dedicatedLessonContent(level,unit,unitIndex,5,attempt),c=bank.cards,choice=bank.choice,otherUnits=CURRICULUM.getRoadmap(currentGoalId(),level).filter(value=>value.id!==unit.id),readingTwo=`${bank.passage} ${c[4].example}`;
+    return [
+      choice('listening','Listen · main action',`During the “${c[0].word}” mission, what action does the first speaker take at the end?`,'The speaker writes down the next step.',['The speaker cancels the plan.','The speaker leaves without a decision.','The speaker changes the topic completely.'],{audio:bank.dialogue},1),
+      choice('listening','Listen · exact sentence',`Which complete sentence containing “${c[0].word}” is spoken?`,c[0].example,[c[2].example,c[4].example,`I never use ${c[0].word}.`],{audio:bank.dialogue},2),
+      choice('listening','Listen · key word',`Which key word follows the “${c[1].meaning}” idea in the second speaker’s line?`,c[1].word,[c[3].word,c[5].word,c[0].word],{audio:bank.dialogue},3),
+      choice('reading','Read · main idea',`After reading the “${c[2].word} / ${c[3].word}” situation, what topic is the learner mainly practicing?`,unit.englishTitle,otherUnits.slice(0,3).map(value=>value.englishTitle),{copy:bank.passage},4),
+      choice('reading','Read · evidence','Which statement is supported by the passage?',c[2].example,[c[0].example,c[5].example,'The learner refuses to check the result.'],{copy:bank.passage},5),
+      choice('reading','Read · detail',`Before finishing the “${c[4].word}” task, what does the learner do?`,'Checks the result and explains the next step.',['Starts a completely different task.','Deletes every note immediately.','Waits without taking action.'],{copy:readingTwo},6),
+      choice('vocabulary','Flashcard check',`What does “${c[0].word}” mean?`,c[0].meaning,[c[2].meaning,c[4].meaning,c[5].meaning],{},7),
+      choice('vocabulary','Word in context',`Which word completes: “${c[1].example.replace(new RegExp(c[1].word,'i'),'_____')}”`,c[1].word,[c[3].word,c[5].word,c[0].word],{},8),
+      choice('vocabulary','Choose the useful phrase','Which sentence correctly uses the lesson vocabulary?',c[4].example,[`She ${c[4].word} is every day.`,`He can ${c[4].word}s it.`,c[2].example],{},9),
+      choice('grammar','Grammar in context','Choose the clearest complete English sentence.',c[3].example,[`Is ${c[3].example.toLowerCase()}`,c[3].example.replace(/\.$/,'')+' yesterday every day.',`Very ${c[3].word} the task.`],{},10),
+      choice('grammar','Build the sentence',`Choose the correct order: ${c[5].example.replace(/[.!?]/g,'').split(' ').reverse().join(' / ')}`,c[5].example,[c[0].example,c[5].example.split(' ').reverse().join(' '),c[2].example],{},11),
+      {type:'write-check',skill:'writing',emoji:'✍️',title:'Write the missing word',prompt:c[0].example.replace(new RegExp(c[0].word,'i'),'_____'),answer:c[0].word,hint:'Type one English word from this chặng.'},
+      {type:'write-check',skill:'writing',emoji:'⌨️',title:'Complete the second sentence',prompt:c[1].example.replace(new RegExp(c[1].word,'i'),'_____'),answer:c[1].word,hint:'Spelling counts. Type the missing English word.'},
+      Object.assign(bank.speak(c[2]),{checkpoint:true,title:'Speaking check · sentence 1'}),
+      Object.assign(bank.speak(c[3]),{checkpoint:true,title:'Speaking check · sentence 2'})
+    ].map((step,index)=>Object.assign(step,{checkpoint:true,questionNumber:index+1,attempt}));
+  }
 
   function buildLessonSteps(level,index,unitIndex) {
     const unit=CURRICULUM?.getRoadmap(currentGoalId(),level)?.[unitIndex||0],lesson=unit?.lessons?.[index];
     if (!unit||!lesson) return [{type:'intro',emoji:'🚀',title:'English lesson',copy:'Practice English in context.'},{type:'complete',emoji:'✨',title:'Lesson complete!',copy:'Keep going.'}];
-    const byType=type=>unit.exercises.filter(exercise=>exercise.type===type),choice=(exercise,emoji,title)=>({type:'choice',emoji,title:title||exercise.typeLabel,copy:exercise.passage||'',question:exercise.question,options:exercise.options,correct:exercise.options.indexOf(exercise.answer),audio:exercise.audio||'',explanation:exercise.explanation||''});
     const intro={type:'intro',emoji:['📘','🎧','📖','🧩','🎤','🏆'][index]||'🚀',title:lesson.title,copy:`${unit.englishTitle} · ${level} · ${lesson.minutes} minutes`,outcomes:unit.guidebook.outcomes};
     const complete={type:'complete',emoji:'✨',title:`${lesson.title} complete!`,copy:'You used English to understand and respond. The next lesson is ready.'};
-    const speaking=byType('speaking'),listening=byType('listening'),reading=byType('reading'),cloze=byType('cloze'),grammar=byType('grammar'),ordering=byType('ordering'),matching=byType('matching'),translation=byType('translation'),dictation=byType('dictation');
+    const checkpointKey=[currentGoalId(),level,unitIndex].join(':'),attempt=index===5?Number(state.checkpointAttempts?.[checkpointKey]||1):0,bank=dedicatedLessonContent(level,unit,unitIndex,index,attempt),c=bank.cards,choice=bank.choice;
+    if (index===5) return [Object.assign({},intro,{copy:`15-question checkpoint · Attempt ${attempt}`,outcomes:['Complete listening, speaking, reading, writing and flashcard tasks','Score at least 70% to pass the chặng','A new set is created every time you enter']})].concat(buildCheckpointSteps(level,unit,unitIndex,attempt),[Object.assign({},complete,{checkpoint:true,title:'Checkpoint complete'})]);
     const plans=[
-      [choice(matching[0],'🔗','Match a key phrase'),choice(cloze[0],'✍️','Complete the sentence'),choice(ordering[0],'🧱','Build the sentence'),{type:'speak',emoji:'🎤',title:'Say the key phrase',copy:'Listen first, then repeat it naturally.',question:speaking[0].target}],
-      [choice(listening[0],'🎧','Listen for the main idea'),choice(listening[1],'👂','Listen for a key word'),choice(dictation[0],'⌨️','Sound-to-sentence'),{type:'speak',emoji:'🎤',title:'Shadow the speaker',copy:'Copy the rhythm and stress, not only the words.',question:speaking[0].target}],
-      [choice(reading[0],'📖','Read for the main idea'),choice(reading[1],'🔎','Find evidence'),choice(cloze[1],'✍️','Use a word from the story'),{type:'speak',emoji:'💬',title:'Retell one idea',copy:'Say the sentence, then change one detail.',question:speaking[1].target}],
-      [choice(grammar[0],'🧩','Choose correct usage'),choice(grammar[1],'✅','Check the second phrase'),choice(ordering[0],'🧱','Build an accurate sentence'),choice(ordering[1],'⚡','Build another sentence')],
-      [{type:'speak',emoji:'🎤',title:'Speak with confidence',copy:'Listen, repeat, then make one personal example.',question:speaking[0].target},{type:'speak',emoji:'🗣️',title:'Extend your answer',copy:'Repeat the model and add one reason.',question:speaking[1].target},choice(translation[0],'🌐','Express the idea in English'),choice(translation[1],'✍️','Choose a natural response')],
-      [choice(listening[1],'🎧','Listening checkpoint'),choice(reading[1],'📖','Reading checkpoint'),choice(grammar[0],'🧩','Grammar checkpoint'),choice(cloze[1],'✍️','Vocabulary checkpoint'),choice(ordering[1],'🏁','Final challenge')]
+      [bank.flash(c[0]),bank.flash(c[1]),choice('vocabulary','Recognize the meaning',`What does “${c[0].word}” mean?`,c[0].meaning,[c[2].meaning,c[4].meaning,c[5].meaning],{},1),choice('grammar','Complete a new sentence',c[1].example.replace(new RegExp(c[1].word,'i'),'_____'),c[1].word,[c[3].word,c[5].word,c[0].word],{},2),bank.speak(c[0]),bank.write(c[1],c[0])],
+      [choice('listening','Follow a new conversation','Why does the first speaker write something down?','To remember the next step.',['To cancel the discussion.','To change the subject.','To avoid the task.'],{audio:bank.dialogue},3),choice('listening','Catch the exact phrase','Which sentence do you hear?',c[1].example,[c[3].example,c[5].example,c[0].example],{audio:bank.dialogue},4),bank.flash(c[1]),bank.speak(c[0]),choice('vocabulary','Listening vocabulary','Which word did the second speaker use?',c[1].word,[c[2].word,c[4].word,c[5].word],{audio:bank.dialogue},5),bank.write(c[0])],
+      [choice('reading','Read a fresh situation','What is the learner trying to make clearer?','The message.',['The weather forecast.','A restaurant menu.','A train ticket.'],{copy:bank.passage},6),choice('reading','Find textual evidence','What happens before the learner finishes?','The learner checks the result.',['The learner starts another course.','The learner deletes the message.','The learner ignores the result.'],{copy:bank.passage},7),bank.flash(c[2]),choice('vocabulary','Vocabulary from the story','Which word appears in the reading?',c[3].word,[c[0].word,c[4].word,c[5].word],{copy:bank.passage},8),bank.speak(c[2]),bank.write(c[3])],
+      [choice('grammar','Choose natural English','Which sentence is complete and natural?',c[0].example,[`She ${c[0].word} is every day.`,`He can ${c[0].word}s it.`,c[0].example.split(' ').reverse().join(' ')],{},9),choice('grammar','Word order challenge',`Choose the correct order: ${c[1].example.replace(/[.!?]/g,'').split(' ').reverse().join(' / ')}`,c[1].example,[c[1].example.split(' ').reverse().join(' '),c[3].example,c[5].example],{},10),bank.flash(c[4]),bank.speak(c[1]),bank.write(c[0],c[1]),choice('listening','Grammar by ear','Which complete sentence sounds correct?',c[4].example,[`Is ${c[4].example.toLowerCase()}`,`Very ${c[4].word} the task.`,c[2].example],{audio:c[4].example},11)],
+      [bank.speak(c[0]),bank.write(c[0],c[1]),choice('listening','Respond after listening','Which reply best continues the conversation?',c[2].example,[c[4].example,c[5].example,'I do not understand any word.'],{audio:bank.dialogue},12),bank.flash(c[3]),choice('reading','Read before you respond','Which sentence gives a useful next action?',c[5].example,[c[1].example,c[3].example,'There is no action to take.'],{copy:bank.passage},13),bank.speak(c[5])]
     ];
     return [intro].concat(plans[index]||plans[0],[complete]);
   }
@@ -1057,7 +1096,8 @@
     level=typeof level==='string'?level:state.level; unitIndex=Number.isInteger(unitIndex)?unitIndex:Number(state.roadmapUnit)||0;
     const curriculumUnit=CURRICULUM?.getRoadmap(currentGoalId(),level)?.[unitIndex],items=curriculumUnit?.lessons||(roadmapData[level]||roadmapData.A1);
     if (!Number.isInteger(index)) { const completed=new Set(state.completedLessons||[]),next=items.findIndex((item,i)=>!completed.has(item.id||level+'-'+i)); index=next<0?items.length-1:next; }
-    const selected=items[index]; state.roadmapUnit=unitIndex; activeRoadmapLesson={level,index,unit:unitIndex,id:selected.id||level+'-'+index,title:selected.title||selected[0]};
+    const selected=items[index]; state.roadmapUnit=unitIndex; activeRoadmapLesson={level,index,unit:unitIndex,id:selected.id||level+'-'+index,title:selected.title||selected[0]}; lessonCheckpoint=index===5; lessonCheckpointScore=0; lessonCheckpointAnswered=0;
+    if (lessonCheckpoint) { const key=[currentGoalId(),level,unitIndex].join(':'); state.checkpointAttempts=state.checkpointAttempts||{}; state.checkpointAttempts[key]=Number(state.checkpointAttempts[key]||0)+1; localStorage.setItem(USER_STORAGE_PREFIX+state.userId,JSON.stringify(state)); }
     if (state.level!==level) { state.level=level; state.memoryIndex=0; saveState(true); renderState(); updateFlashcard(); }
     lessonSteps=buildLessonSteps(level,index,unitIndex); currentLessonStep=0; selectedLessonAnswer=null; renderLesson(); $('#lessonModal').addClass('open').attr('aria-hidden','false'); $('body').css('overflow','hidden');
   }
@@ -1068,9 +1108,12 @@
     $('#lessonStepLabel').text((currentLessonStep + 1) + ' / ' + lessonSteps.length);
     let body = '';
     if (step.type === 'intro') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.copy)}</p><div class="lesson-question"><strong>By the end of this lesson, you can:</strong>${(step.outcomes||[]).map(outcome=>`<p>✓ ${escapeHtml(outcome)}</p>`).join('')}</div><div class="lesson-nav"><button class="primary-btn lesson-next">Start lesson →</button></div></div>`;
-    if (step.type === 'choice') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2>${step.audio?'<button class="lesson-audio">▶ Listen</button>':''}${step.copy?`<div class="lesson-passage">${escapeHtml(step.copy)}</div>`:''}<div class="lesson-question"><strong>${escapeHtml(step.question)}</strong></div><div class="lesson-options">${step.options.map((o,i)=>`<button data-answer="${i}">${String.fromCharCode(65+i)}. ${escapeHtml(o)}</button>`).join('')}</div><div class="lesson-nav"><button class="primary-btn lesson-check" disabled>Check answer</button></div></div>`;
-    if (step.type === 'speak') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.copy)}</p><div class="lesson-question" style="text-align:center"><button class="tiny-sound lesson-sound">♫</button><h3>${escapeHtml(step.question)}</h3></div><div class="lesson-nav"><button class="secondary-btn lesson-sound">Listen again</button><button class="primary-btn lesson-next">I said it →</button></div></div>`;
-    if (step.type === 'complete') body = `<div class="lesson-screen lesson-complete"><img src="assets/mochi.png" class="mascot-img" alt="Mochi chúc mừng"><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.copy)}</p><div class="xp-earned">+25 XP</div><p>🔥 Không giới hạn số bài trong ngày</p><button class="primary-btn lesson-finish">Nhận thưởng & mở bài tiếp</button></div>`;
+    if (step.type === 'choice') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2>${step.audio?'<button class="lesson-audio">▶ Listen</button>':''}${step.copy?`<div class="lesson-passage">${escapeHtml(step.copy)}</div>`:''}<div class="lesson-question"><strong>${escapeHtml(step.question)}</strong></div><div class="lesson-options">${step.options.map((o,i)=>`<button data-answer="${i}" data-correct="${i===step.correct}">${String.fromCharCode(65+i)}. ${escapeHtml(o)}</button>`).join('')}</div><div class="lesson-nav"><button class="primary-btn lesson-check" disabled>Check answer</button></div></div>`;
+    if (step.type === 'flashcard') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2><button class="lesson-flashcard" type="button"><span>${escapeHtml(step.word)}</span><small>${escapeHtml(step.phonetic)}</small><em>Tap to reveal</em><strong>${escapeHtml(step.meaning)}</strong><p>${escapeHtml(step.example)}</p><i>${escapeHtml(step.vi)}</i></button><div class="lesson-nav"><button class="secondary-btn lesson-sound" data-lesson-text="${escapeHtml(step.word)}">♫ Listen</button><button class="primary-btn lesson-next">Continue →</button></div></div>`;
+    if (step.type === 'write') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2><div class="lesson-question"><strong>${escapeHtml(step.prompt)}</strong></div><textarea class="lesson-writing" maxlength="600" placeholder="Write in English..."></textarea><div class="lesson-nav"><button class="primary-btn lesson-writing-done" data-min-words="${step.minWords||5}">Save response →</button></div></div>`;
+    if (step.type === 'write-check') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.hint)}</p><div class="lesson-question"><strong>${escapeHtml(step.prompt)}</strong></div><input class="lesson-short-answer" autocomplete="off" placeholder="Type the missing word"><div class="lesson-nav"><button class="primary-btn lesson-write-check" disabled>Check writing</button></div></div>`;
+    if (step.type === 'speak') body = `<div class="lesson-screen"><div class="lesson-emoji">${step.emoji}</div><h2>${escapeHtml(step.title)}</h2><p>${escapeHtml(step.copy)}</p><div class="lesson-question" style="text-align:center"><button class="tiny-sound lesson-sound">♫</button><h3>${escapeHtml(step.question)}</h3></div><div class="lesson-nav"><button class="secondary-btn lesson-sound">Listen again</button><button class="primary-btn ${step.checkpoint?'lesson-speak-done':'lesson-next'}">I said the full sentence →</button></div></div>`;
+    if (step.type === 'complete') { const percent=lessonCheckpoint?Math.round(lessonCheckpointScore/15*100):100,passed=percent>=70; body = `<div class="lesson-screen lesson-complete"><img src="assets/mochi.png" class="mascot-img" alt="Mochi chúc mừng"><h2>${step.checkpoint?(passed?'Checkpoint passed!':'Keep practicing this chặng'):escapeHtml(step.title)}</h2><p>${step.checkpoint?'You answered '+lessonCheckpointScore+' of 15 tasks successfully.':escapeHtml(step.copy)}</p><div class="xp-earned">${step.checkpoint?percent+'%':'+25 XP'}</div><p>${step.checkpoint?'Listening · Speaking · Reading · Writing · Flashcards':'🔥 Không giới hạn số bài trong ngày'}</p><button class="primary-btn ${step.checkpoint&&!passed?'lesson-retry-checkpoint':'lesson-finish'}">${step.checkpoint&&!passed?'Try a fresh 15-question set →':'Nhận thưởng & mở bài tiếp'}</button></div>`; }
     $('#lessonContent').html(body);
   }
   function nextLesson() { currentLessonStep = Math.min(lessonSteps.length - 1, currentLessonStep + 1); selectedLessonAnswer = null; renderLesson(); }
@@ -1263,22 +1306,30 @@
     $('.close-modal').on('click', closeLesson);
     $('#lessonModal').on('click', function(e){ if (e.target === this) closeLesson(); });
     $(document).on('click','.lesson-next', nextLesson);
-    $(document).on('click','.lesson-sound',()=>{ const step=lessonSteps[currentLessonStep]; if (step?.question) speak(step.question); });
+    $(document).on('click','.lesson-sound',function(){ const step=lessonSteps[currentLessonStep],text=$(this).data('lesson-text')||step?.question||step?.word; if (text) speak(text); });
     $(document).on('click','.lesson-audio',()=>{ const step=lessonSteps[currentLessonStep]; if (step?.audio) speakDialogue(step.audio); });
     $(document).on('click','.guidebook-sound',function(){ speak($(this).data('phrase')||''); });
+    $(document).on('click','.lesson-flashcard',function(){ $(this).toggleClass('revealed'); });
+    $(document).on('input','.lesson-short-answer',function(){ $('.lesson-write-check').prop('disabled',!this.value.trim()); });
+    $(document).on('click','.lesson-writing-done',function(){ const words=$('.lesson-writing').val().trim().split(/\s+/).filter(Boolean); if (words.length<Number($(this).data('min-words')||5)) return toast('Write at least '+($(this).data('min-words')||5)+' English words.','error'); nextLesson(); });
+    $(document).on('click','.lesson-write-check',function(){ const step=lessonSteps[currentLessonStep],value=$('.lesson-short-answer').val().trim().toLowerCase().replace(/[^a-z'-]/g,''),answer=String(step.answer||'').trim().toLowerCase().replace(/[^a-z'-]/g,''),correct=value===answer; lessonCheckpointAnswered++; if (correct) lessonCheckpointScore++; $('.lesson-short-answer').prop('disabled',true).toggleClass('answer-correct',correct).toggleClass('answer-wrong',!correct); $('.lesson-nav').html(`<div class="lesson-feedback ${correct?'success':'error'}"><strong>${correct?'✓ Correct spelling!':'Check the word again'}</strong><span>${correct?'Your written answer matches.':'Correct answer: '+escapeHtml(step.answer)}</span></div><button class="primary-btn lesson-next">Continue →</button>`); });
+    $(document).on('click','.lesson-speak-done',function(){ lessonCheckpointAnswered++; lessonCheckpointScore++; nextLesson(); });
+    $(document).on('click','.lesson-retry-checkpoint',function(){ closeLesson(); openLesson(activeRoadmapLesson.index,activeRoadmapLesson.level,activeRoadmapLesson.unit); });
     $(document).on('click','.lesson-options button', function(){ selectedLessonAnswer = Number($(this).data('answer')); $('.lesson-options button').removeClass('selected'); $(this).addClass('selected'); $('.lesson-check').prop('disabled',false); });
     $(document).on('click','.lesson-check', function(){
       const step=lessonSteps[currentLessonStep],correct=selectedLessonAnswer===step.correct,$buttons=$('.lesson-options button');
       $buttons.prop('disabled',true).eq(step.correct).addClass('answer-correct'); if (!correct) $buttons.eq(selectedLessonAnswer).addClass('answer-wrong');
       $('.lesson-nav').html(`<div class="lesson-feedback ${correct?'success':'error'}"><strong>${correct?'✓ Correct!':'Not quite yet'}</strong><span>${escapeHtml(step.explanation||'Read the complete sentence once more.')}</span></div><button class="primary-btn lesson-next">Continue →</button>`);
+      if (step.checkpoint) { lessonCheckpointAnswered++; if (correct) lessonCheckpointScore++; }
       if (!correct) state.mistakes.unshift({type:'Lesson',wrong:$buttons.eq(selectedLessonAnswer).text().replace(/^[A-Z]\.\s*/,''),right:$buttons.eq(step.correct).text().replace(/^[A-Z]\.\s*/,''),note:step.title});
     });
     $(document).on('click','.lesson-finish', function(){
       if (!activeRoadmapLesson) return closeLesson();
+      if (lessonCheckpoint) { const key=[currentGoalId(),activeRoadmapLesson.level,activeRoadmapLesson.unit].join(':'); state.checkpointResults=state.checkpointResults||{}; const percent=Math.round(lessonCheckpointScore/15*100),previous=state.checkpointResults[key]||{}; state.checkpointResults[key]={bestScore:Math.max(Number(previous.bestScore)||0,percent),lastScore:percent,attempts:Number(previous.attempts||0)+1,completedAt:new Date().toISOString()}; }
       const firstCompletion=!state.completedLessons.includes(activeRoadmapLesson.id);
       if (firstCompletion) state.completedLessons.push(activeRoadmapLesson.id);
       if (!state.completedToday.includes(activeRoadmapLesson.id)) state.completedToday.push(activeRoadmapLesson.id);
-      state.lessonProgress[activeRoadmapLesson.id]=100; if (firstCompletion) addXp(25,10); else saveState(true);
+      state.lessonProgress[activeRoadmapLesson.id]=100; if (firstCompletion) addXp(lessonCheckpoint?50:25,lessonCheckpoint?15:10); else saveState(true);
       confetti(); closeLesson(); renderRoadmap(activeRoadmapLesson.level);
       $('.task-card[data-lesson="daily"]').addClass('completed').removeClass('current').find('.mini-progress i').css('width','100%');
       toast(firstCompletion?'Bài tiếp theo đã mở — bạn có thể học tiếp ngay!':'Bạn vừa ôn lại bài này.','success');
